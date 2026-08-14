@@ -74,6 +74,15 @@ Copy-Item -Recurse -Force ".\dsh-file-explorer" "$dshNodeModules\dsh-file-explor
 - **`cordis.patch.yml` 曾被意外清空**（机制未定位）：重启前请确认 `file-explorer` 行仍在
 - **临时动态版（fexp-1）与持久版会注册同名 Slot**：持久版生效后应停止/移除临时版（重启后临时版自然消失）
 
+## 版本历史
+
+- **v1.1.0**：v2 架构重写，修复 v1 的加载失败——
+  - Client 半区 `$mount` 自挂载 `fileExplorer` 命名空间（v1 因 `inject: ["remote.fileExplorer"]` 等待一个无人挂载的服务而永远 pending）；
+  - 命名空间改用 `ctx.get("remote.fileExplorer")` 访问（属性访问在自挂载场景会抛错并导致面板条目崩溃退役）；
+  - Host 半区改用 `TypertRemoteService` 自动注册（服务 + `typertRemote` 绑定一步完成）；
+  - 补丁注册行重写（此前曾被意外清空导致 Host 半区未加载）。
+- **v1.0.0**：v1 初版（TypertRemote 桥实现）——存在 Client 等待不存在的 `remote.fileExplorer` 而加载失败的问题，已被 v1.1.0 取代。
+
 ## License
 
 MIT
