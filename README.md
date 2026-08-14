@@ -6,7 +6,8 @@
 
 - **懒加载目录树**：按需展开工作区目录，目录在前、文件带大小；默认隐藏 `node_modules`、`.git` 等（可切换显示）
 - **文件预览 + 内联编辑**：点击文件在面板内预览；文本文件可进入编辑模式（Ctrl+S 保存，带磁盘冲突检测）；超大文件自动截断、二进制文件自动识别；预览区高度可拖动
-- **IDE 式右键菜单**：树中右键即可——新建文件（txt / py / md / json / js / ts / html / css 等模板）、新建文件夹、重命名、复制、粘贴（同名自动加 ` (1)` 后缀）、复制绝对路径 / 相对路径
+- **IDE 式右键菜单**：树中右键即可——新建文件（txt / py / md / json / js / ts / html / css 等模板）、新建文件夹、重命名、复制、粘贴（同名自动加 ` (1)` 后缀）、复制绝对路径 / 相对路径、删除（移入系统回收站）
+- **实时刷新**：新建 / 重命名 / 粘贴 / 保存 / 删除后树即时更新，无需手动刷新
 - **工作区自动跟随**：切换会话/工作区后约 1 秒内自动切换到对应目录
 - **三种停靠模式**：右侧（挤压对话栏，不遮挡）/ 中间 / 浮动（自由拖动 + 四边四角缩放）
 - **悬浮球**：侧边可拖动入口，可随时开关
@@ -84,8 +85,10 @@ DSH 旧版本没有 `dsh plugin` 流程，需要把本包复制到两处并手�
 | 粘贴 | 目录 / 文件 / 空白区 | 把剪贴板中的文件/目录复制到目标目录；同名自动加 ` (1)`、` (2)` 后缀 |
 | 复制绝对路径 | 文件 / 目录 | 完整路径写入系统剪贴板 |
 | 复制相对路径 | 文件 / 目录 | 相对当前工作区根目录的路径写入系统剪贴板 |
+| 删除 | 文件 / 目录 | 确认后移入系统回收站（Windows；其它平台永久删除） |
 
 > 提示：粘贴到「文件」上 = 粘贴到该文件所在目录；粘贴到目录 / 树空白区 = 粘贴到该目录。
+> 删除后文件可在系统回收站中恢复；删除目录会连同其全部内容一起移入回收站。
 
 ## 卸载
 
@@ -104,6 +107,8 @@ dsh plugin --profile web remove dsh-file-explorer
 | 切换工作区后目录没跟上 | 约 1 秒内自动跟随；也可点「↻ 刷新」手动重载 |
 | 保存文件提示「文件已改变」 | 该文件在编辑期间被其它程序修改；点「编辑」重新载入后再保存 |
 | 粘贴报错「不能粘贴到自身所在目录」 | 目标目录就是源文件所在目录；先进入其它目录再粘贴 |
+| 删除的文件去哪了 | Windows 下移入系统回收站（可恢复）；无回收站机制的平台（如部分网络盘 / 非 Windows）为永久删除 |
+| 删除报错「recycle bin failed」 | 文件被占用或无回收站支持；关闭占用程序后重试 |
 | 复制到剪贴板失败 | 浏览器在非安全上下文禁用剪贴板 API（本机 localhost 通常可用）；可改用右键「复制」内部剪贴板 |
 | 面板 / 悬浮球位置跑出屏幕 | 清除浏览器该站点的 `dsh-file-explorer:*` localStorage 键后重新打开 |
 | 与旧版 / 临时版插件冲突 | v1.2.0 起通过官方 bundle 只安装一个实例即可，移除其它副本 |
@@ -113,18 +118,21 @@ dsh plugin --profile web remove dsh-file-explorer
 - 目标版本：DSH `0.1.0-rc.6`，Windows 优先
 - 部分 CSS 选择器（侧边栏宽度探测 `.pI_x6G_frame` 等）针对该版本的客户端产物编写，**DSH 大版本升级后可能需要复核**
 - Host 半区依赖 dsh 自带的 `@deepseek-ai/dsh-typert-protocol`（peer 依赖，由 dsh 提供）——**不要**单独安装该包的独立副本，否则 Remote 桥会失效
-- **写操作说明**：编辑保存 / 新建 / 重命名 / 复制由 Host 半区直接通过 Node `fs/promises` 执行（不走 `ctx.fs` 的沙箱围栏）。这是刻意设计——本插件是**用户手动操作的文件管理器**，与读任意路径的行为对称；但请注意它不受 DSH 的 read-only / workspace-write 策略约束，请勿在不可信环境下使用
+- **写操作说明**：编辑保存 / 新建 / 重命名 / 复制 / 删除由 Host 半区直接通过 Node `fs/promises` 执行（删除在 Windows 走 PowerShell 回收站）。这是刻意设计——本插件是**用户手动操作的文件管理器**，与读任意路径的行为对称；但请注意它不受 DSH 的 read-only / workspace-write 策略约束，请勿在不可信环境下使用
 - 大目录（如 `node_modules`）整目录复制会较慢，属正常现象
 
 ## 开发者
 
-- **Host 半区**（`lib/index.js`）：`FileExplorerService extends TypertRemoteService` 注册 `fileExplorer` 远程服务（`fsList` / `fsRead` / `fsWrite` / `fsCreate` / `fsRename` / `fsCopy` / `wsRoot` / `wsList`）；Remote 标记通过 `markRemote` 手动应用（不依赖 Node 装饰器语法）；写操作直接使用 `node:fs/promises`；`agent/status` + `session/event` 维护最近活跃工作区
+- **Host 半区**（`lib/index.js`）：`FileExplorerService extends TypertRemoteService` 注册 `fileExplorer` 远程服务（`fsList` / `fsRead` / `fsWrite` / `fsCreate` / `fsRename` / `fsCopy` / `fsDelete` / `wsRoot` / `wsList`）；Remote 标记通过 `markRemote` 手动应用（不依赖 Node 装饰器语法）；写操作直接使用 `node:fs/promises`，删除在 Windows 通过 `powershell.exe` + `Microsoft.VisualBasic` 移入回收站；`agent/status` + `session/event` 维护最近活跃工作区
 - **Client 半区**（`lib/client.js`）：`__ModuleLoader__.load` 加载；`ctx.remote.$mount` 自挂载 `fileExplorer` 命名空间，用 `ctx.get("remote.fileExplorer")` 调用（返回 `{ok, value}` 信封统一解包）；零 React hooks（原生 DOM 渲染）
 - 改代码后：Client 改动刷新页面即可生效，Host 改动需重启 DSH；无需构建
 - 已安装用户升级：`dsh plugin --profile web update dsh-file-explorer`
 
 ## 版本历史
 
+- **v1.4.0**：删除到回收站 + 实时刷新——
+  - 右键菜单新增「删除」（文件 / 目录，确认后 Windows 移入系统回收站，可恢复）；
+  - 修复新建 / 重命名 / 粘贴 / 保存后树不实时更新的问题（目录刷新语义修正 + 强制绕过 in-flight 防重入；新建文件夹自动展开）。
 - **v1.3.0**：文件编辑与 IDE 式右键菜单——
   - 预览支持内联编辑（Ctrl+S 保存、磁盘冲突检测、二进制/截断文件不可编辑）；
   - 右键菜单：新建文件（txt/py/md/json/js/ts/html/css 模板）/ 新建文件夹 / 重命名 / 复制 / 粘贴（同名自动加 ` (1)` 后缀）/ 复制绝对与相对路径；
