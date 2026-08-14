@@ -40,7 +40,20 @@ DeepSeek Harness Web UI 侧边文件浏览器（持久插件）。
 服务不存在 → Client 等 `remote.fileExplorer` 永久 pending → `web boot: 1 entry did not
 activate`。本次同时修复了补丁行与 Client 挂载方式，双保险。
 
-## 安装（手动）
+## 安装
+
+### 官方方式（推荐，v1.2+）
+
+需要 pnpm（`npm install -g pnpm`）：
+
+```bash
+dsh plugin --profile web add github:Zalpha263/dsh-file-explorer
+```
+
+已发布到 npm 后可直接 `dsh plugin --profile web add dsh-file-explorer`。装完重启 DSH。
+升级/卸载：`dsh plugin --profile web update/remove dsh-file-explorer`。
+
+### 手动方式（v1.2 之前）
 
 dsh 的持久插件需要**两份同步副本**（宿主行从 profile 目录解析，client 模块扫描从 dsh 安装目录解析）：
 
@@ -76,6 +89,7 @@ Copy-Item -Recurse -Force ".\dsh-file-explorer" "$dshNodeModules\dsh-file-explor
 
 ## 版本历史
 
+- **v1.2.0**：支持 dsh 官方 bundle 安装（`dsh.bundle.patch` + 自带 `cordis.patch.yml`）；`@deepseek-ai/dsh-typert-protocol` 改为 peerDependency——与 gateway 共享同一模块实例（Remote 标记的 WeakMap 按模块实例隔离，独立副本会导致桥接失效）。
 - **v1.1.0**：v2 架构重写，修复 v1 的加载失败——
   - Client 半区 `$mount` 自挂载 `fileExplorer` 命名空间（v1 因 `inject: ["remote.fileExplorer"]` 等待一个无人挂载的服务而永远 pending）；
   - 命名空间改用 `ctx.get("remote.fileExplorer")` 访问（属性访问在自挂载场景会抛错并导致面板条目崩溃退役）；

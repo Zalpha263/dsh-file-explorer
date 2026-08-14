@@ -1,6 +1,6 @@
 {
   "name": "dsh-file-explorer",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Persistent web file explorer: lazy directory tree, file preview, dock/float panel, workspace follow, floating ball toggle.",
   "type": "module",
   "main": "lib/index.js",
@@ -19,9 +19,12 @@
         "@deepseek-ai/dsh-typert-registry",
         "@deepseek-ai/dsh-client-ui-slots"
       ]
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
     }
   },
-  "dependencies": {
+  "peerDependencies": {
     "@deepseek-ai/dsh-typert-protocol": "^0.1.0-rc.6"
   },
   "keywords": [
@@ -35,6 +38,7 @@
   "files": [
     "lib",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "cordis.patch.yml"
   ]
 }

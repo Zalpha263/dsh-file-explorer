@@ -1,0 +1,7 @@
+# dsh bundle layer for dsh-file-explorer.
+#
+# Mounts the plugin row. Deployments override it in the profile's own
+# cordis.patch.yml (later layers win per row).
+- insert:
+    - id: file-explorer
+      name: dsh-file-explorer
