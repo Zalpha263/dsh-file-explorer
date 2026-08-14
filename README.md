@@ -5,7 +5,8 @@
 ## ✨ 功能特性
 
 - **懒加载目录树**：按需展开工作区目录，目录在前、文件带大小；默认隐藏 `node_modules`、`.git` 等（可切换显示）
-- **文件预览**：点击文件在面板内预览；超大文件自动截断、二进制文件自动识别、长文本智能换行；预览区高度可拖动
+- **文件预览 + 内联编辑**：点击文件在面板内预览；文本文件可进入编辑模式（Ctrl+S 保存，带磁盘冲突检测）；超大文件自动截断、二进制文件自动识别；预览区高度可拖动
+- **IDE 式右键菜单**：树中右键即可——新建文件（txt / py / md / json / js / ts / html / css 等模板）、新建文件夹、重命名、复制、粘贴（同名自动加 ` (1)` 后缀）、复制绝对路径 / 相对路径
 - **工作区自动跟随**：切换会话/工作区后约 1 秒内自动切换到对应目录
 - **三种停靠模式**：右侧（挤压对话栏，不遮挡）/ 中间 / 浮动（自由拖动 + 四边四角缩放）
 - **悬浮球**：侧边可拖动入口，可随时开关
@@ -66,6 +67,26 @@ DSH 旧版本没有 `dsh plugin` 流程，需要把本包复制到两处并手�
 | 预览区上方分隔条 | 拖动调整预览区高度 |
 | 点目录 / 点文件 / ✕ | 展开目录 / 打开文件预览 / 关闭预览 |
 
+### 预览与编辑
+
+- 点文件 → 预览；预览头部点「编辑」进入编辑模式（仅限文本文件；二进制 / 已截断文件不可编辑）
+- 编辑时 `Ctrl+S`（或「💾 保存」）写盘；「取消」丢弃改动；`Esc` 退出编辑
+- 保存带版本检测：文件在打开期间被外部改动会拒绝保存并提示（避免覆盖他人修改）
+
+### 右键菜单
+
+| 菜单项 | 适用 | 作用 |
+|--------|------|------|
+| 新建文件… | 目录 / 空白区 | 输入文件名（可带扩展名），自动套用模板：`txt`(空) / `md` / `py` / `js` / `json` / `ts` / `html` / `css`，其它扩展名为空文件 |
+| 新建文件夹… | 目录 / 空白区 | 输入名称创建文件夹 |
+| 重命名… | 文件 / 目录 | 行内输入新名称，`Enter` 确认 / `Esc` 取消 |
+| 复制 | 文件 / 目录 | 记录到内部剪贴板（刷新页面不丢失）；目标行有虚线框提示 |
+| 粘贴 | 目录 / 文件 / 空白区 | 把剪贴板中的文件/目录复制到目标目录；同名自动加 ` (1)`、` (2)` 后缀 |
+| 复制绝对路径 | 文件 / 目录 | 完整路径写入系统剪贴板 |
+| 复制相对路径 | 文件 / 目录 | 相对当前工作区根目录的路径写入系统剪贴板 |
+
+> 提示：粘贴到「文件」上 = 粘贴到该文件所在目录；粘贴到目录 / 树空白区 = 粘贴到该目录。
+
 ## 卸载
 
 ```bash
@@ -81,6 +102,9 @@ dsh plugin --profile web remove dsh-file-explorer
 | 点「📁 文件」没有出现面板 | 多为页面缓存或渲染异常：先硬刷新（Ctrl+F5）；仍不行则重启 DSH |
 | 树里显示红色错误行 | 该路径当前不可读（权限 / 已删除）；点「↻ 刷新」重试 |
 | 切换工作区后目录没跟上 | 约 1 秒内自动跟随；也可点「↻ 刷新」手动重载 |
+| 保存文件提示「文件已改变」 | 该文件在编辑期间被其它程序修改；点「编辑」重新载入后再保存 |
+| 粘贴报错「不能粘贴到自身所在目录」 | 目标目录就是源文件所在目录；先进入其它目录再粘贴 |
+| 复制到剪贴板失败 | 浏览器在非安全上下文禁用剪贴板 API（本机 localhost 通常可用）；可改用右键「复制」内部剪贴板 |
 | 面板 / 悬浮球位置跑出屏幕 | 清除浏览器该站点的 `dsh-file-explorer:*` localStorage 键后重新打开 |
 | 与旧版 / 临时版插件冲突 | v1.2.0 起通过官方 bundle 只安装一个实例即可，移除其它副本 |
 
@@ -89,16 +113,22 @@ dsh plugin --profile web remove dsh-file-explorer
 - 目标版本：DSH `0.1.0-rc.6`，Windows 优先
 - 部分 CSS 选择器（侧边栏宽度探测 `.pI_x6G_frame` 等）针对该版本的客户端产物编写，**DSH 大版本升级后可能需要复核**
 - Host 半区依赖 dsh 自带的 `@deepseek-ai/dsh-typert-protocol`（peer 依赖，由 dsh 提供）——**不要**单独安装该包的独立副本，否则 Remote 桥会失效
+- **写操作说明**：编辑保存 / 新建 / 重命名 / 复制由 Host 半区直接通过 Node `fs/promises` 执行（不走 `ctx.fs` 的沙箱围栏）。这是刻意设计——本插件是**用户手动操作的文件管理器**，与读任意路径的行为对称；但请注意它不受 DSH 的 read-only / workspace-write 策略约束，请勿在不可信环境下使用
+- 大目录（如 `node_modules`）整目录复制会较慢，属正常现象
 
 ## 开发者
 
-- **Host 半区**（`lib/index.js`）：`FileExplorerService extends TypertRemoteService` 注册 `fileExplorer` 远程服务（`fsList` / `fsRead` / `wsRoot` / `wsList`）；Remote 标记通过 `markRemote` 手动应用（不依赖 Node 装饰器语法）；`agent/status` + `session/event` 维护最近活跃工作区
+- **Host 半区**（`lib/index.js`）：`FileExplorerService extends TypertRemoteService` 注册 `fileExplorer` 远程服务（`fsList` / `fsRead` / `fsWrite` / `fsCreate` / `fsRename` / `fsCopy` / `wsRoot` / `wsList`）；Remote 标记通过 `markRemote` 手动应用（不依赖 Node 装饰器语法）；写操作直接使用 `node:fs/promises`；`agent/status` + `session/event` 维护最近活跃工作区
 - **Client 半区**（`lib/client.js`）：`__ModuleLoader__.load` 加载；`ctx.remote.$mount` 自挂载 `fileExplorer` 命名空间，用 `ctx.get("remote.fileExplorer")` 调用（返回 `{ok, value}` 信封统一解包）；零 React hooks（原生 DOM 渲染）
 - 改代码后：Client 改动刷新页面即可生效，Host 改动需重启 DSH；无需构建
 - 已安装用户升级：`dsh plugin --profile web update dsh-file-explorer`
 
 ## 版本历史
 
+- **v1.3.0**：文件编辑与 IDE 式右键菜单——
+  - 预览支持内联编辑（Ctrl+S 保存、磁盘冲突检测、二进制/截断文件不可编辑）；
+  - 右键菜单：新建文件（txt/py/md/json/js/ts/html/css 模板）/ 新建文件夹 / 重命名 / 复制 / 粘贴（同名自动加 ` (1)` 后缀）/ 复制绝对与相对路径；
+  - Host 新增 `fsWrite` / `fsCreate` / `fsRename` / `fsCopy`（`node:fs/promises` 直连，不走沙箱围栏——见「兼容性」）。
 - **v1.2.0**：支持 dsh 官方 bundle 安装（`dsh.bundle.patch` + 自带 `cordis.patch.yml`）；`@deepseek-ai/dsh-typert-protocol` 改为 peerDependency——与 gateway 共享同一模块实例（Remote 标记的 WeakMap 按模块实例隔离，独立副本会导致桥接失效）。
 - **v1.1.0**：v2 架构重写，修复 v1 的加载失败——
   - Client 半区 `$mount` 自挂载 `fileExplorer` 命名空间（v1 因 `inject: ["remote.fileExplorer"]` 等待一个无人挂载的服务而永远 pending）；
