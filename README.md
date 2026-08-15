@@ -7,7 +7,9 @@
 - **懒加载目录树**：按需展开工作区目录，目录在前、文件带大小；默认隐藏 `node_modules`、`.git` 等（可切换显示）
 - **文件预览 + 内联编辑**：点击文件在面板内预览；文本文件可进入编辑模式（Ctrl+S 保存，带磁盘冲突检测）；超大文件自动截断、二进制文件自动识别；预览区高度可拖动
 - **IDE 式右键菜单**：树中右键即可——新建文件（txt / py / md / json / js / ts / html / css 等模板）、新建文件夹、重命名、复制、粘贴（同名自动加 ` (1)` 后缀）、复制绝对路径 / 相对路径、删除（移入系统回收站）
-- **实时刷新**：新建 / 重命名 / 粘贴 / 保存 / 删除后树即时更新，无需手动刷新
+- **拖放移动**：直接把文件 / 文件夹拖到其它目录行（或树空白区）即可移动，跨设备自动复制+删除回退；目标行高亮提示
+- **实时刷新**：新建 / 重命名 / 粘贴 / 保存 / 删除 / 移动后树即时更新，无需手动刷新
+- **跨平台回收站**：Windows 系统回收站 / macOS 废纸篓 / Linux XDG 回收站，均带内置回收站兜底（`~/.dsh-file-explorer-trash/`）
 - **工作区自动跟随**：切换会话/工作区后约 1 秒内自动切换到对应目录
 - **三种停靠模式**：右侧（挤压对话栏，不遮挡）/ 中间 / 浮动（自由拖动 + 四边四角缩放）
 - **悬浮球**：侧边可拖动入口，可随时开关
@@ -74,6 +76,12 @@ DSH 旧版本没有 `dsh plugin` 流程，需要把本包复制到两处并手�
 - 编辑时 `Ctrl+S`（或「💾 保存」）写盘；「取消」丢弃改动；`Esc` 退出编辑
 - 保存带版本检测：文件在打开期间被外部改动会拒绝保存并提示（避免覆盖他人修改）
 
+### 拖放移动
+
+- 按住任意文件 / 文件夹行，拖动到目标**目录行**（或树空白区）松开即移动
+- 目标目录高亮提示；拖到自身或子目录会被拒绝；拖回原目录无操作
+- 跨设备（不同盘 / 挂载点）移动自动转「复制 + 删除」完成
+
 ### 右键菜单
 
 | 菜单项 | 适用 | 作用 |
@@ -82,10 +90,10 @@ DSH 旧版本没有 `dsh plugin` 流程，需要把本包复制到两处并手�
 | 新建文件夹… | 目录 / 空白区 | 输入名称创建文件夹 |
 | 重命名… | 文件 / 目录 | 行内输入新名称，`Enter` 确认 / `Esc` 取消 |
 | 复制 | 文件 / 目录 | 记录到内部剪贴板（刷新页面不丢失）；目标行有虚线框提示 |
-| 粘贴 | 目录 / 文件 / 空白区 | 把剪贴板中的文件/目录复制到目标目录；同名自动加 ` (1)`、` (2)` 后缀 |
+| 粘贴 | 目录 / 文件 / 空白区 | 把剪贴板中的文件/目录复制到目标目录；同名自动加 ` (2)` 后缀（点文件如 `.env` 也正确保留前缀） |
 | 复制绝对路径 | 文件 / 目录 | 完整路径写入系统剪贴板 |
 | 复制相对路径 | 文件 / 目录 | 相对当前工作区根目录的路径写入系统剪贴板 |
-| 删除 | 文件 / 目录 | 确认后移入系统回收站（Windows；其它平台永久删除） |
+| 删除 | 文件 / 目录 | 确认后移入系统回收站（Windows）/ 废纸篓（macOS）/ XDG 回收站（Linux），失败时落内置回收站 |
 
 > 提示：粘贴到「文件」上 = 粘贴到该文件所在目录；粘贴到目录 / 树空白区 = 粘贴到该目录。
 > 删除后文件可在系统回收站中恢复；删除目录会连同其全部内容一起移入回收站。
@@ -107,29 +115,37 @@ dsh plugin --profile web remove dsh-file-explorer
 | 切换工作区后目录没跟上 | 约 1 秒内自动跟随；也可点「↻ 刷新」手动重载 |
 | 保存文件提示「文件已改变」 | 该文件在编辑期间被其它程序修改；点「编辑」重新载入后再保存 |
 | 粘贴报错「不能粘贴到自身所在目录」 | 目标目录就是源文件所在目录；先进入其它目录再粘贴 |
-| 删除的文件去哪了 | Windows 下移入系统回收站（可恢复）；无回收站机制的平台（如部分网络盘 / 非 Windows）为永久删除 |
-| 删除报错「recycle bin failed」 | 文件被占用或无回收站支持；关闭占用程序后重试 |
+| 拖放时提示「不能移动到自身或子目录中」 | 目标目录是源目录本身或其内部；拖到其它目录即可 |
+| 删除的文件去哪了 | Windows 系统回收站 / macOS 废纸篓 / Linux XDG 回收站；系统回收站不可用时移入插件内置回收站 `~/.dsh-file-explorer-trash/`（手动删除该目录即清空） |
+| 删除报错「recycle bin failed」等 | 文件被占用或无回收站支持；关闭占用程序后重试 |
 | 复制到剪贴板失败 | 浏览器在非安全上下文禁用剪贴板 API（本机 localhost 通常可用）；可改用右键「复制」内部剪贴板 |
 | 面板 / 悬浮球位置跑出屏幕 | 清除浏览器该站点的 `dsh-file-explorer:*` localStorage 键后重新打开 |
 | 与旧版 / 临时版插件冲突 | v1.2.0 起通过官方 bundle 只安装一个实例即可，移除其它副本 |
 
 ## 兼容性
 
-- 目标版本：DSH `0.1.0-rc.6`，Windows 优先
+- 目标版本：DSH `0.1.0-rc.6`；Windows / macOS / Linux（路径分隔符、大小写敏感、回收站策略均按平台自适应）
 - 部分 CSS 选择器（侧边栏宽度探测 `.pI_x6G_frame` 等）针对该版本的客户端产物编写，**DSH 大版本升级后可能需要复核**
 - Host 半区依赖 dsh 自带的 `@deepseek-ai/dsh-typert-protocol`（peer 依赖，由 dsh 提供）——**不要**单独安装该包的独立副本，否则 Remote 桥会失效
-- **写操作说明**：编辑保存 / 新建 / 重命名 / 复制 / 删除由 Host 半区直接通过 Node `fs/promises` 执行（删除在 Windows 走 PowerShell 回收站）。这是刻意设计——本插件是**用户手动操作的文件管理器**，与读任意路径的行为对称；但请注意它不受 DSH 的 read-only / workspace-write 策略约束，请勿在不可信环境下使用
-- 大目录（如 `node_modules`）整目录复制会较慢，属正常现象
+- **写操作说明**：编辑保存 / 新建 / 重命名 / 复制 / 移动 / 删除由 Host 半区直接通过 Node `fs/promises` 执行。这是刻意设计——本插件是**用户手动操作的文件管理器**，与读任意路径的行为对称；但请注意它不受 DSH 的 read-only / workspace-write 策略约束，请勿在不可信环境下使用
+- **删除的回收站策略**：Windows 用系统回收站（PowerShell）；macOS 用系统废纸篓（Finder / osascript）；Linux 用 `gio trash`（XDG）；以上不可用时统一回退到插件内置回收站 `~/.dsh-file-explorer-trash/`（时间戳命名，防同名覆盖）
+- 大目录（如 `node_modules`）整目录复制 / 跨设备移动会较慢，属正常现象
 
 ## 开发者
 
-- **Host 半区**（`lib/index.js`）：`FileExplorerService extends TypertRemoteService` 注册 `fileExplorer` 远程服务（`fsList` / `fsRead` / `fsWrite` / `fsCreate` / `fsRename` / `fsCopy` / `fsDelete` / `wsRoot` / `wsList`）；Remote 标记通过 `markRemote` 手动应用（不依赖 Node 装饰器语法）；写操作直接使用 `node:fs/promises`，删除在 Windows 通过 `powershell.exe` + `Microsoft.VisualBasic` 移入回收站；`agent/status` + `session/event` 维护最近活跃工作区
-- **Client 半区**（`lib/client.js`）：`__ModuleLoader__.load` 加载；`ctx.remote.$mount` 自挂载 `fileExplorer` 命名空间，用 `ctx.get("remote.fileExplorer")` 调用（返回 `{ok, value}` 信封统一解包）；零 React hooks（原生 DOM 渲染）
+- **Host 半区**（`lib/index.js`）：`FileExplorerService extends TypertRemoteService` 注册 `fileExplorer` 远程服务（`fsList` / `fsRead` / `fsWrite` / `fsCreate` / `fsRename` / `fsCopy` / `fsDelete` / `fsMove` / `wsRoot` / `wsList`）；Remote 标记通过 `markRemote` 手动应用（不依赖 Node 装饰器语法）；写操作直接使用 `node:fs/promises`；删除按平台走 PowerShell / osascript / gio trash，失败落内置回收站；`fsMove` 处理跨设备（EXDEV）复制+删除回退；`assertNoSelfNesting` 防目录复制/移动进自身；`agent/status` + `session/event` 维护最近活跃工作区
+- **Client 半区**（`lib/client.js`）：`__ModuleLoader__.load` 加载；`ctx.remote.$mount` 自挂载 `fileExplorer` 命名空间，用 `ctx.get("remote.fileExplorer")` 调用（返回 `{ok, value}` 信封统一解包）；零 React hooks（原生 DOM 渲染）；路径拼接 / 相对路径 / 大小写比较按 `wsRoot` 返回的 `platform` 自适应
 - 改代码后：Client 改动刷新页面即可生效，Host 改动需重启 DSH；无需构建
 - 已安装用户升级：`dsh plugin --profile web update dsh-file-explorer`
 
 ## 版本历史
 
+- **v1.5.0**：跨平台健壮性修复 + 拖放移动——
+  - 新增拖放移动：文件/文件夹直接拖入其它目录（含树空白区），目标行高亮；跨设备自动「复制+删除」回退；防拖入自身/子目录；
+  - 删除跨平台化：macOS 走系统废纸篓（Finder）、Linux 走 `gio trash`（XDG），均带内置回收站兜底 `~/.dsh-file-explorer-trash/`；
+  - 修复 Linux/macOS 路径 bug：客户端路径拼接/相对路径/大小写比较按平台自适应（原硬编码 `\` 导致非 Windows 新建、重命名、粘贴、删除全部失效）；
+  - 修复 `fsCopy` 目录复制进自身会无限递归、点文件（`.env`）复制后丢点前缀；`fsRename` 增加自嵌套防护；
+  - fetchDir 加请求序号防乱序覆盖；删除清理缓存加分隔符边界；菜单禁用项正常渲染文字。
 - **v1.4.0**：删除到回收站 + 实时刷新——
   - 右键菜单新增「删除」（文件 / 目录，确认后 Windows 移入系统回收站，可恢复）；
   - 修复新建 / 重命名 / 粘贴 / 保存后树不实时更新的问题（目录刷新语义修正 + 强制绕过 in-flight 防重入；新建文件夹自动展开）。
