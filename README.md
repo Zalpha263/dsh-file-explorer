@@ -5,16 +5,15 @@
 ## ✨ 功能特性
 
 - **懒加载目录树**：按需展开工作区目录，目录在前、文件带大小；默认隐藏 `node_modules`、`.git` 等（可切换显示）
-- **预览 + 内联编辑**：点击文件即预览；文本文件可编辑（Ctrl+S 保存、磁盘冲突检测）；大文件自动截断、二进制自动识别
+- **预览 + 内联编辑**：点击文件即预览（512KB 内自动截断、二进制自动识别）；文本文件可编辑（Ctrl+S 保存、磁盘冲突检测）
 - **IDE 式右键菜单**：新建文件 / 文件夹、重命名、复制粘贴（同名自动加后缀）、复制绝对 / 相对路径、删除到回收站
 - **拖放移动**：拖到目标目录行或树空白区即移动；跨设备自动「复制 + 删除」回退
 - **实时刷新**：新建 / 重命名 / 粘贴 / 保存 / 删除 / 移动后树即时更新
 - **跨平台回收站**：Windows / macOS / Linux 系统回收站，带内置兜底（`~/.dsh-file-explorer-trash/`）
 - **工作区自动跟随**：切换会话 / 工作区后约 1 秒内自动切换目录
-- **三种停靠模式**：右侧 / 中间 / 浮动（可拖宽、四边四角缩放）
-- **ui-beautify 插件面板适配**：检测到 ui-beautify 时自动加入「插件面板」（卡片 / 经典模式统一管理）；未安装时回退自带按钮 + 面板
-- **悬浮球**：侧边可拖动入口，可随时开关
-- **偏好记忆**：位置 / 尺寸 / 停靠模式 / 预览高度 / 悬浮球开关本地记忆
+- **停靠与浮动**：右侧 / 中间 / 浮动三种形态（可拖宽、四边四角缩放）——仅独立模式；装有 ui-beautify 时由插件面板统一管理
+- **ui-beautify 插件面板适配**：检测到 ui-beautify 时自动加入「插件面板」（卡片 / 经典模式统一管理，名称「文件浏览器」）；未安装时回退自带按钮 + 面板
+- **偏好记忆**：位置 / 尺寸 / 停靠模式 / 预览高度本地记忆
 
 ## 安装
 
@@ -56,7 +55,6 @@ DSH 旧版本没有 `dsh plugin` 流程，需要把本包复制到两处并手�
 ### 打开方式
 
 - 会话标题栏右侧「📁 文件」按钮（ui-beautify 安装时入口为「🧩 插件面板」）
-- 侧边悬浮球「📁」（点击开关面板；拖动改变位置）
 
 ### 面板操作
 
@@ -67,7 +65,6 @@ DSH 旧版本没有 `dsh plugin` 流程，需要把本包复制到两处并手�
 | 面板四边 / 四角 | 浮动模式下自由调整大小 |
 | ↻ 刷新 | 重新加载当前目录 |
 | 👁 隐藏 | 显示 / 隐藏 `node_modules`、`.git` 等条目 |
-| 🪁 悬浮球 | 显示 / 隐藏侧边悬浮球 |
 | 预览区上方分隔条 | 拖动调整预览区高度 |
 | 点目录 / 点文件 / ✕ | 展开目录 / 打开文件预览 / 关闭预览 |
 
@@ -84,7 +81,7 @@ DSH 旧版本没有 `dsh plugin` 流程，需要把本包复制到两处并手�
 dsh plugin --profile web remove dsh-file-explorer
 ```
 
-重启 DSH 后插件不再加载，面板与悬浮球消失，无残留。
+重启 DSH 后插件不再加载，面板消失，无残留。
 
 ## 常见问题（FAQ）
 
@@ -95,7 +92,7 @@ dsh plugin --profile web remove dsh-file-explorer
 | 保存文件提示「文件已改变」 | 该文件在编辑期间被其它程序修改；重新载入后再保存 |
 | 删除的文件去哪了 | 系统回收站；不可用时落内置回收站 `~/.dsh-file-explorer-trash/`（自动清理：保留 30 天、最多 200 条） |
 | 复制到剪贴板失败 | 浏览器在非安全上下文禁用剪贴板 API（本机 localhost 通常可用）；可改用右键「复制」内部剪贴板 |
-| 面板 / 悬浮球位置跑出屏幕 | 清除浏览器该站点的 `dsh-file-explorer:*` localStorage 键后重新打开 |
+| 面板位置跑出屏幕 | 清除浏览器该站点的 `dsh-file-explorer:*` localStorage 键后重新打开 |
 | 与旧版 / 临时版插件冲突 | v1.2.0 起通过官方 bundle 只安装一个实例即可，移除其它副本 |
 
 ## 兼容性
@@ -108,13 +105,14 @@ dsh plugin --profile web remove dsh-file-explorer
 
 ## 开发者
 
-- **Host 半区**（`lib/index.js`）：`FileExplorerService` 注册 `fileExplorer` 远程服务（`fsList` / `fsRead` / `fsWrite` / `fsCreate` / `fsRename` / `fsCopy` / `fsDelete` / `fsMove` / `wsRoot` / `wsList`）；写操作 `node:fs/promises` 直连；删除按平台走 PowerShell / osascript / gio trash，失败落内置回收站；`fsMove` 处理跨设备（EXDEV）复制 + 删除回退；`agent/status` + `session/event` 维护最近活跃工作区
-- **Client 半区**（`lib/client.js`）：`__ModuleLoader__.load` 加载；`ctx.remote.$mount` 自挂载 `fileExplorer` 命名空间；零 React hooks（原生 DOM 渲染）；路径拼接 / 相对路径 / 大小写比较按 `platform` 自适应
+- **Host 半区**（`lib/index.js`）：`FileExplorerService` 注册 `fileExplorer` 远程服务（`fsList` / `fsRead` / `fsWrite` / `fsCreate` / `fsRename` / `fsCopy` / `fsDelete` / `fsMove` / `wsRoot` / `wsList`）；读操作走 DSH `fs` 服务，写操作 `node:fs/promises` 直连；删除按平台走 PowerShell / osascript / gio trash，失败落内置回收站（30 天 / 200 条自动清理）；`fsMove` 处理跨设备（EXDEV）复制 + 删除回退；`agent/status` + `session/event` 维护最近活跃工作区
+- **Client 半区**（`lib/client.js`）：`__ModuleLoader__.load` 加载；`ctx.remote.$mount` 自挂载 `fileExplorer` 命名空间；零 React hooks（原生 DOM 渲染）；路径拼接 / 相对路径 / 大小写比较按 `platform` 自适应；检测到 ui-beautify 的 `dock` 服务时注册为插件面板
 - 改代码后：Client 改动刷新页面即可生效，Host 改动需重启 DSH；无需构建
 - 已安装用户升级：`dsh plugin --profile web update dsh-file-explorer`
 
 ## 版本历史
 
+- **v1.7.3**：移除悬浮球功能（侧边可拖动入口、工具栏开关按钮及相关偏好记忆全部删除；旧 localStorage 残留数据不再读取，无影响）。装有 ui-beautify 时本由插件面板浮动替代，现独立模式也不再提供。
 - **v1.7.2**：健壮性与内存优化（行为不变）——
   - 目录缓存加上限（300 条 FIFO 淘汰，同步清理请求序号表；被淘汰目录再次展开时重新加载，短暂"加载中"；文件内容从不缓存不受影响）；
   - 修复行内输入框 blur 定时器竞态（不会误关新打开的输入框）；卸载时关闭残留的右键菜单/输入浮层；
