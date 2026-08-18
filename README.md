@@ -19,7 +19,7 @@
 
 ### 前置要求
 
-- DSH `0.1.0-rc.6`，Windows（路径处理按 Windows 习惯）
+- DSH `0.1.0-rc.7`，Windows（路径处理按 Windows 习惯）
 - 官方安装方式需要 [pnpm](https://pnpm.io/zh/)（`npm install -g pnpm`）
 
 ### 官方方式（推荐）
@@ -97,7 +97,7 @@ dsh plugin --profile web remove dsh-file-explorer
 
 ## 兼容性
 
-- 目标版本：DSH `0.1.0-rc.6`；Windows / macOS / Linux（路径分隔符、大小写敏感、回收站策略均按平台自适应）
+- 目标版本：DSH `0.1.0-rc.7`；Windows / macOS / Linux（路径分隔符、大小写敏感、回收站策略均按平台自适应）
 - 部分 CSS 选择器（侧边栏宽度探测 `.pI_x6G_frame` 等）针对该版本的客户端产物编写，**DSH 大版本升级后可能需要复核**
 - Host 半区依赖 dsh 自带的 `@deepseek-ai/dsh-typert-protocol`（peer 依赖）——**不要**单独安装该包的独立副本，否则 Remote 桥会失效
 - **写操作说明**：编辑保存 / 新建 / 重命名 / 复制 / 移动 / 删除由 Host 半区直接通过 Node `fs/promises` 执行——这是刻意设计（用户手动操作的文件管理器），但**不受 DSH 的 read-only / workspace-write 策略约束**，请勿在不可信环境下使用
