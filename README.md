@@ -19,7 +19,7 @@
 
 ### 前置要求
 
-- DSH `0.1.0-rc.7`，Windows（路径处理按 Windows 习惯）
+- DSH `0.1.1-rc.2`（或兼容的 `0.1.x` 系列）；Windows / macOS / Linux 均支持（路径处理按平台自适应）
 - 官方安装方式需要 [pnpm](https://pnpm.io/zh/)（`npm install -g pnpm`）
 
 ### 官方方式（推荐）
@@ -28,7 +28,6 @@
 dsh plugin --profile web add github:Zalpha263/dsh-file-explorer
 ```
 
-- 发布到 npm 后可直接：`dsh plugin --profile web add dsh-file-explorer`
 - 装完**重启 DSH**，会话标题栏右侧会出现「📁 文件」按钮（安装 ui-beautify 后由「🧩 插件面板」统一管理）
 - 升级 / 卸载：`dsh plugin --profile web update/remove dsh-file-explorer`
 
@@ -100,7 +99,7 @@ dsh plugin --profile web remove dsh-file-explorer
 - 目标版本：DSH `0.1.0-rc.7`；Windows / macOS / Linux（路径分隔符、大小写敏感、回收站策略均按平台自适应）
 - 部分 CSS 选择器（侧边栏宽度探测 `.pI_x6G_frame` 等）针对该版本的客户端产物编写，**DSH 大版本升级后可能需要复核**
 - Host 半区依赖 dsh 自带的 `@deepseek-ai/dsh-typert-protocol`（peer 依赖）——**不要**单独安装该包的独立副本，否则 Remote 桥会失效
-- **写操作说明**：编辑保存 / 新建 / 重命名 / 复制 / 移动 / 删除由 Host 半区直接通过 Node `fs/promises` 执行——这是刻意设计（用户手动操作的文件管理器），但**不受 DSH 的 read-only / workspace-write 策略约束**，请勿在不可信环境下使用
+- **写操作边界（v1.8.1）**：编辑保存 / 新建 / 重命名 / 复制 / 移动 / 删除由 Host 半区直接通过 Node `fs/promises` 执行，并**限制在当前工作区根目录内**——工作区外的写 / 删 / 改名 / 移动会被拒绝（只读的浏览与预览不受限）。这是刻意设计（用户手动操作的文件管理器），但仍**不受 DSH 的 read-only / workspace-write 策略约束**，请勿在不可信环境下使用
 - 大目录（如 `node_modules`）整目录复制 / 跨设备移动会较慢，属正常现象
 
 ## 开发者
@@ -112,6 +111,8 @@ dsh plugin --profile web remove dsh-file-explorer
 
 ## 版本历史
 
+- **v1.8.1**：安全加固——破坏性文件操作（写 / 建 / 改名 / 复制 / 移动 / 删除）限制在工作区根目录内，越界拒绝（只读不受限）；修复内置回收站清理策略反转（原按时间升序导致保留最旧 200 条、删除最新）；工作区跟随被用户拒绝后不再每轮重复弹确认。
+- **v1.8.0**：重构——颜色值规范化、去重与 token 化（行为不变）。
 - **v1.7.3**：移除悬浮球功能（侧边可拖动入口、工具栏开关按钮及相关偏好记忆全部删除；旧 localStorage 残留数据不再读取，无影响）。装有 ui-beautify 时本由插件面板浮动替代，现独立模式也不再提供。
 - **v1.7.2**：健壮性与内存优化（行为不变）——
   - 目录缓存加上限（300 条 FIFO 淘汰，同步清理请求序号表；被淘汰目录再次展开时重新加载，短暂"加载中"；文件内容从不缓存不受影响）；
