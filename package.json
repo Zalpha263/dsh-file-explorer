@@ -1,6 +1,6 @@
 {
   "name": "dsh-file-explorer",
-  "version": "1.9.1",
+  "version": "1.9.3",
   "description": "Persistent web file explorer: lazy directory tree, search/filter (Ctrl+F), preview + inline editing (Markdown render, syntax highlight, line numbers, virtualized large files), reveal in system file manager, IDE-style context menu (new/rename/copy/paste/delete-to-trash/paths), drag-and-drop move, dock/float panel, workspace follow.",
   "type": "module",
   "main": "lib/index.js",
