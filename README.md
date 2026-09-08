@@ -1,24 +1,24 @@
 # dsh-file-explorer
 
-> DeepSeek Harness（DSH）Web UI 的文件浏览器：不离开聊天界面就能浏览工作区文件、预览与编辑内容，面板可停靠、可浮动。
+> DeepSeek Harness（DSH）Web UI 里的文件浏览器：不用离开聊天界面就能浏览工作区文件、预览与编辑内容，面板可以停靠、也可以拖成浮动窗口。
 
-## ✨ 功能特性
+## 它做什么
 
-- **懒加载目录树**：按需展开工作区目录，目录在前、文件带大小；默认隐藏 `node_modules`、`.git` 等（可切换）
-- **树内搜索过滤**：`Ctrl+F` 呼出搜索条，即时过滤已加载节点（保留目录层级）；命中子串高亮、`↑↓` 导航、`Enter` 打开、匹配计数与空状态；跟随「显示隐藏」开关
-- **Markdown 渲染预览**：`.md` 文件默认富文本渲染（GFM 表格 / 任务列表 / 删除线、代码块语法高亮 + 一键复制、可折叠标题目录、限宽居中）；`渲染 / 编辑` 切换（`Ctrl+[` / `Ctrl+]`），按文件类型记忆上次模式
-- **IDE 式实时高亮编辑**：打开代码/文本文件直接进入编辑视图（无需切编辑模式）——输入即所见语法高亮（客户端内联 highlight.js，34 种语言，与只读视图同版本同调用、高亮一致）；行号随输入实时同步、滚动精确对齐；长行横向滚动（不软换行）；`Tab` 缩进、`Ctrl+S` 保存、`Esc` 退出；>4MB 分段「继续加载」；深浅主题自动切换配色
-- **预览独立卡片**：预览在独立浮动卡片中打开（面板内预览区退役、树区占满）；卡片可拖动、四边四角缩放、双击最大化/还原、`Esc` 或 × 关闭；单卡片复用
-- **导航与工具**：拖放移动、IDE 式右键菜单（新建/重命名/复制/粘贴/复制路径/删除到回收站）、跨平台回收站、工作区自动跟随、停靠与浮动、ui-beautify 插件面板适配、偏好记忆
-- **HIG 风格界面**：Apple HIG 规范统一（系统字体栈、8pt 圆角间距、深浅色材质、SF Symbols 风格图标、150–200ms 动效）
+**浏览与搜索**：目录树按需展开（目录排在前、文件带大小），默认隐藏 `node_modules`、`.git` 这类条目，需要时用工具栏的「👁 隐藏」开关显示；按 `Ctrl+F` 会在树内呼出搜索条，实时过滤已加载的节点并保留目录层级，命中内容高亮，`↑` / `↓` 导航、`Enter` 打开、`→` / `←` 展开或收起，搜索条会显示匹配数量与空状态。
 
-### ⌨️ 快捷键（按 `?` 查看）
+**预览与编辑**：点开文件即进入预览——Markdown 默认富文本渲染（GFM 表格 / 任务列表 / 删除线、代码块语法高亮并支持一键复制、可折叠标题目录），代码与文本文件则直接进入带语法高亮的编辑视图，输入即所见，行号随输入同步、滚动精确对齐，长行横向滚动不软换行；`Ctrl+S` 保存、`Esc` 退出，`Ctrl+[` / `Ctrl+]` 在 Markdown 的「渲染 / 编辑」之间切换，插件会按文件类型记住你上次用的模式。超过 4MB 的文件会分段加载，点「继续加载」逐段读取。预览显示在独立的浮动卡片里，卡片可以拖动、四边四角缩放、双击最大化 / 还原，`Esc` 或 × 关闭。
+
+**文件操作**：文件与目录行支持拖放移动，右键菜单提供新建文件（内置 `txt` / `md` / `py` / `js` / `json` / `ts` / `html` / `css` 模板）、新建文件夹、重命名、复制、粘贴（同名自动加后缀）、复制绝对或相对路径，以及删除到回收站；删除会按平台走系统回收站（Windows PowerShell / macOS Finder / Linux `gio trash`），系统回收站不可用时落到内置回收站 `~/.dsh-file-explorer-trash/`（保留 30 天、最多 200 条，自动清理）。工作区会自动跟随当前会话切换，面板本身支持「右侧 / 中间 / 浮动」三种停靠方式并记住你的偏好。
+
+**界面**：整体按 Apple HIG 规范统一——系统字体栈、8pt 圆角与间距、深浅色材质、SF Symbols 风格图标、150–200ms 动效，预览卡片与面板在深浅主题间自动切换配色。
+
+### 快捷键（按 `?` 查看帮助）
 
 | 键 | 动作 |
 |---|---|
 | `Ctrl+F` / `⌘F` | 搜索 / 过滤文件名 |
 | `Esc` | 关闭搜索 · 退出编辑 · 关闭浮层 |
-| `↑` / `↓` | 搜索结果中导航 |
+| `↑` / `↓` | 在搜索结果中导航 |
 | `Enter` | 打开选中文件（目录则展开） |
 | `→` / `←` | 展开 / 收起目录 |
 | `Ctrl+[` / `Ctrl+]` | 切换渲染 / 编辑视图（仅 Markdown） |
@@ -28,120 +28,129 @@
 
 ## 安装
 
-### 前置要求
-
-- DSH `0.1.1-rc.2`（或兼容的 `0.1.x` 系列）；Windows / macOS / Linux 均支持（路径处理按平台自适应）
-- 官方安装方式需要 [pnpm](https://pnpm.io/zh/)（`npm install -g pnpm`）
-
-### 官方方式（推荐）
+前置要求是 DSH `0.1.1-rc.2`（或兼容的 `0.1.x` 系列），Windows / macOS / Linux 都支持（路径分隔符、大小写敏感、回收站策略按平台自适应），官方安装方式还需要 [pnpm](https://pnpm.io/zh/)（`npm install -g pnpm`）。
 
 ```bash
 dsh plugin --profile web add github:Zalpha263/dsh-file-explorer
+
+# 升级与卸载
+dsh plugin --profile web update dsh-file-explorer
+dsh plugin --profile web remove dsh-file-explorer
 ```
 
-- 装完**重启 DSH**，会话标题栏右侧会出现「📁 文件」按钮（安装 ui-beautify 后由「🧩 插件面板」统一管理）
-- 升级 / 卸载：`dsh plugin --profile web update/remove dsh-file-explorer`
-
-<details>
-<summary>旧版手动安装（仅 v1.2 之前使用，已不推荐）</summary>
-
-DSH 旧版本没有 `dsh plugin` 流程，需要把本包复制到两处并手工注册：
-
-1. 复制包到 profile 目录：`$DSH_HOME/profiles/<profile>/node_modules/dsh-file-explorer`
-2. 复制包到 dsh 安装目录：`<npmRoot>/@deepseek-ai/dsh/node_modules/dsh-file-explorer`
-3. 在 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 追加注册行：
-
-```yaml
-- insert:
-    - id: file-explorer
-      name: dsh-file-explorer
-```
-
-4. 重启 DSH。
-</details>
+装完**重启 DSH**，会话标题栏右侧会出现「📁 文件」按钮；如果同时装了 ui-beautify，入口会统一收进「🧩 插件面板」，本插件不再占用标题栏位置。
 
 ## 使用说明
 
-### 打开方式
-
-- 会话标题栏右侧「📁 文件」按钮（ui-beautify 安装时入口为「🧩 插件面板」）
-
-### 面板操作
+面板里可以做的操作：
 
 | 控件 / 操作 | 作用 |
 |-------------|------|
-| 右侧 / 中间 / 浮动 | 停靠模式切换；「右侧/中间」模式拖边缘调整宽度 |
+| 右侧 / 中间 / 浮动 | 切换停靠方式；「右侧 / 中间」模式下拖边缘调整宽度 |
 | 标题栏拖动 | 浮动模式下拖动面板位置 |
 | 面板四边 / 四角 | 浮动模式下自由调整大小 |
 | ↻ 刷新 | 重新加载当前目录 |
 | 👁 隐藏 | 显示 / 隐藏 `node_modules`、`.git` 等条目 |
-| 预览区上方分隔条 | 拖动调整预览区高度 |
 | 点目录 / 点文件 / ✕ | 展开目录 / 打开文件预览 / 关闭预览 |
 
-### 操作速览
+几个容易忽略的细节：保存带版本检测，如果文件在你编辑期间被其它程序改动，保存会被拒绝并提示重新载入；粘贴到某个「文件」上等于粘贴到它所在的目录；删除目录会把里面的内容一起移入回收站。
 
-- **打开与编辑**：点文件即打开预览——代码/文本文件直接进入**高亮可编辑**视图（输入即所见）；`.md` 默认富文本渲染，可切「编辑」；`Ctrl+S` 保存、`Esc` 退出；保存带版本检测，编辑期间被外部改动会拒绝保存
-- **拖放移动**：按住文件 / 文件夹行拖到目标目录行（或树空白区）松开即移动；拖到自身 / 子目录被拒绝
-- **右键菜单**：新建文件（内置 `txt` / `md` / `py` / `js` / `json` / `ts` / `html` / `css` 模板）、新建文件夹、重命名、复制、粘贴（同名自动加后缀）、复制绝对 / 相对路径、删除（确认后移入回收站）
-- 提示：粘贴到「文件」= 粘贴到其所在目录；删除目录会连同全部内容移入回收站
+## 安全边界（重要）
 
-## 卸载
+编辑保存、新建、重命名、复制、移动、删除这些写操作由 Host 半区直接通过 Node 的 `fs/promises` 执行，并且**限制在当前工作区根目录内**——工作区之外的写、删、改名、移动都会被拒绝（只读的浏览与预览不受这个限制），工作区根目录本身也禁止删除、重命名和移动。这是刻意的设计（这是一个由用户手动操作的文件管理器），但它**不受 DSH 的 read-only / workspace-write 策略约束**，请不要在不可信环境下使用。
 
-```bash
-dsh plugin --profile web remove dsh-file-explorer
-```
-
-重启 DSH 后插件不再加载，面板消失，无残留。
-
-## 常见问题（FAQ）
+## 常见问题
 
 | 问题 | 原因与解决 |
 |------|-----------|
-| 点「📁 文件」没有出现面板 | 多为页面缓存或渲染异常：先硬刷新（Ctrl+F5）；仍不行则重启 DSH |
-| 树里显示红色错误行 | 该路径当前不可读（权限 / 已删除）；点「↻ 刷新」重试 |
-| 保存文件提示「文件已改变」 | 该文件在编辑期间被其它程序修改；重新载入后再保存 |
-| 删除的文件去哪了 | 系统回收站；不可用时落内置回收站 `~/.dsh-file-explorer-trash/`（自动清理：保留 30 天、最多 200 条） |
-| 复制到剪贴板失败 | 浏览器在非安全上下文禁用剪贴板 API（本机 localhost 通常可用）；可改用右键「复制」内部剪贴板 |
-| 面板位置跑出屏幕 | 清除浏览器该站点的 `dsh-file-explorer:*` localStorage 键后重新打开 |
+| 点「📁 文件」没有出现面板 | 多为页面缓存或渲染异常：先硬刷新（Ctrl+F5），仍不行则重启 DSH |
+| 树里显示红色错误行 | 该路径当前不可读（权限或已删除），点「↻ 刷新」重试 |
+| 保存文件提示「文件已改变」 | 该文件在编辑期间被其它程序修改，重新载入后再保存 |
+| 删除的文件去哪了 | 系统回收站；不可用时落到内置回收站 `~/.dsh-file-explorer-trash/`（保留 30 天、最多 200 条） |
+| 复制到剪贴板失败 | 浏览器在非安全上下文禁用剪贴板 API（本机 localhost 通常可用），可改用右键菜单里的内部剪贴板 |
+| 面板位置跑到屏幕外 | 清除该站点的 `dsh-file-explorer:*` localStorage 键后重新打开 |
 | 与旧版 / 临时版插件冲突 | v1.2.0 起通过官方 bundle 只安装一个实例即可，移除其它副本 |
 
 ## 兼容性
 
-- 目标版本：DSH `0.1.0-rc.7`；Windows / macOS / Linux（路径分隔符、大小写敏感、回收站策略均按平台自适应）
-- 部分 CSS 选择器（侧边栏宽度探测 `.pI_x6G_frame` 等）针对该版本的客户端产物编写，**DSH 大版本升级后可能需要复核**
-- Host 半区依赖 dsh 自带的 `@deepseek-ai/dsh-typert-protocol`（peer 依赖）——**不要**单独安装该包的独立副本，否则 Remote 桥会失效
-- **写操作边界（v1.8.1）**：编辑保存 / 新建 / 重命名 / 复制 / 移动 / 删除由 Host 半区直接通过 Node `fs/promises` 执行，并**限制在当前工作区根目录内**——工作区外的写 / 删 / 改名 / 移动会被拒绝（只读的浏览与预览不受限）。这是刻意设计（用户手动操作的文件管理器），但仍**不受 DSH 的 read-only / workspace-write 策略约束**，请勿在不可信环境下使用
-- 大目录（如 `node_modules`）整目录复制 / 跨设备移动会较慢，属正常现象
+目标版本是 DSH `0.1.0-rc.7` 及兼容的 `0.1.x` 系列；部分 CSS 选择器（例如侧边栏宽度探测用的 `.pI_x6G_frame`）针对该版本的客户端产物编写，**DSH 大版本升级后可能需要复核**。Host 半区依赖 dsh 自带的 `@deepseek-ai/dsh-typert-protocol`（peer 依赖），**不要**单独安装该包的独立副本，否则 Remote 桥会失效。大目录（例如 `node_modules`）整目录复制或跨设备移动会明显变慢，这属于正常现象。
 
 ## 开发者
 
-- **Host 半区**（`lib/index.js`）：`FileExplorerService` 注册 `fileExplorer` 远程服务（`fsList` / `fsRead` / `fsWrite` / `fsCreate` / `fsRename` / `fsCopy` / `fsDelete` / `fsMove` / `wsRoot` / `wsList`）；读操作走 DSH `fs` 服务，写操作 `node:fs/promises` 直连；删除按平台走 PowerShell / osascript / gio trash，失败落内置回收站（30 天 / 200 条自动清理）；`fsMove` 处理跨设备（EXDEV）复制 + 删除回退；`agent/status` + `session/event` 维护最近活跃工作区
-- **Client 半区**（`lib/client.js`）：`__ModuleLoader__.load` 加载；`ctx.remote.$mount` 自挂载 `fileExplorer` 命名空间；零 React hooks（原生 DOM 渲染）；路径拼接 / 相对路径 / 大小写比较按 `platform` 自适应；检测到 ui-beautify 的 `dock` 服务时注册为插件面板
-- 改代码后：Client 改动刷新页面即可生效，Host 改动需重启 DSH；无需构建
-- 已安装用户升级：`dsh plugin --profile web update dsh-file-explorer`
+**Host 半区**（`lib/index.js`）：`FileExplorerService` 注册 `fileExplorer` 远程服务（`fsList` / `fsRead` / `fsWrite` / `fsCreate` / `fsRename` / `fsCopy` / `fsDelete` / `fsMove` / `wsRoot` / `wsList`），读操作走 DSH 的 `fs` 服务、写操作直连 `node:fs/promises`，删除按平台调用系统回收站并在失败时落到内置回收站，`fsMove` 处理跨设备（EXDEV）的复制加删除回退，另通过 `agent/status` 与 `session/event` 维护最近活跃的工作区。
 
-## 版本历史
+**Client 半区**（`lib/client.js`）：`__ModuleLoader__.load` 加载，用 `ctx.remote.$mount` 自挂载 `fileExplorer` 命名空间，全部界面用原生 DOM 渲染（零 React hooks），路径拼接、相对路径与大小写比较按 `platform` 自适应；检测到 ui-beautify 的 `dock` 服务时注册为插件面板，用的是规范写法 `ctx.inject(['dock'], (c) => …)`（规范见 [dsh-ui-beautify/docs/plugin-panel-integration.md](https://github.com/Zalpha263/dsh-ui-beautify/blob/main/docs/plugin-panel-integration.md)）。
 
-- **v1.10.1**：v1.10.0 审计续修（宿主端）——① **陈旧守卫原子化**：`fsWrite` 的期望版本改以 `{ kind: 'replaceIfVersion', version }` 意图传入 `writeText`，由宿主在写入的同一临界区校验（缺失/不匹配抛 `FS_STALE_VERSION`，已映射为友好中文提示）；原实现是"先 stat 比对、再 writeText"的 check-then-write，校验与写入之间存在竞态窗口，可被并发写入覆盖；② **新建文件原子化**：`fsCreate` 的 file 分支改走宿主 `createIfAbsent` 意图（同临界区拒绝已存在目标、经 fs-sandbox 围栏、记录 fs/observed）；目录创建因宿主 fs 无 mkdir 动词仍走 node:fs（含双层围栏）；③ **包含性检查升级为词法 + 真实路径（realpath）双层**：词法通过后，对工作区根与目标再做 `realpath` 规范化比对（目标不存在时回退"父目录 realpath + basename"），封堵 v1.10.0 未覆盖的符号链接/Windows junction 逃逸（v1.10.0 只封了 `..` 词法穿越）；④ **fsRead 流式窗口边界修正**：多读 1 字符再判定截断——文件恰好等于窗口字符数时不再误标"已截断"（原 `>= limit` 在精确命中边界时误报，UI 多出一个返回空内容的"继续加载"）；并注明 `DEFAULT_MAX_BYTES`/`MAX_BYTES_CAP` 命名虽为字节，实际是【字符】窗口语义（streamText 输出已解码字符串，与 windowText 的 limit 一致，命名仅作对齐标记）；⑤ `package.json` 描述清理（"reveal in system file manager" 已随功能移除，属过时陈述）。**客户端（2 万行逐段审计 + 3 组独立复核，修复如下）**——⑥ **expectedVersion 闭环断裂（严重）**：`openFile`/`loadPreviewSegment`（首段/续段）/`fsRead` 回退均未把宿主返回的 `version` 存入 `state.preview`，`ed.version` 恒 null → 宿主陈旧守卫永不触发，外部修改被静默覆盖；现已在全部三个回填点存回 `FsInfo.version` 同族令牌（配合宿主端 `replaceIfVersion` 原子意图，守卫真正生效）；⑦ **剪贴板占位对象往返 bug**：清空剪贴板时写入的 `{path:"",…}` 会被 `readClipboard` 读成非空——刷新后「粘贴」可点却静默无操作；现清空时 `removeItem`、读取时拒绝空 path；⑧ **dock 集成重载感知**：ui-beautify 卸载/重载（HMR）后 `dockApiRef` 仍指向失效闭包，入口按钮永隐藏、面板不注册；`ensureDock` 现按服务身份变化自动重注册；⑨ **saveEdit 竞态守卫**：保存飞行中关闭/切换预览不再被旧回调复活并关掉新编辑器；⑩ **重命名后状态迁移**：编辑中/预览中/剪贴板指向的被改名文件，路径随 `preview`/`editing`/`clipboard` 迁移，展开集合与路径缓存按旧子树重键（否则保存写旧路径必失败）；⑪ **卸载资源清理**：新增统一 `ctx.effect`——预览卡片（含编辑中 `selectionchange` 全局监听器的自愈前提）、独立缩放 chrome 层（透明但 pointer-events:auto 的幽灵把手）、toast 计时器与打开的菜单/浮层全部在卸载时释放；⑫ **健壮性**：`state.platform` 默认值改浏览器推断（原恒 "win32"，非 Windows 主机 wsRoot 首轮前会拼反斜杠路径）、编辑器拖选补 `pointercancel` 清理、续读失败加 toast 提示、设置弹窗检测补子树扫描（宿主加包装层/嵌套时不再漏检而让浮层盖住设置）、停靠面板顶部偏移改运行时实测（`measuredDockTopInset`，宿主头部布局改变自动校准，原 76 硬编码仅在无法测量时回退）、workspace 跟随探针瞬时空快照跳过一轮（防「切根→再切回」抖动，连续两轮读不到 DOM 才回退 `wsRoot()`）、远程错误消息附网关错误码（`gateway/cancelled` 与 `gateway/internal` 可辨）、agent 审计报告修正——`ctx.remote.<ns>` 属性访问并不必然抛错、插件走 `ctx.get` 是选择而非规避（注释已更正）；渲染层窗口切窗改用 `safeSlice` 字素边界（不再切断 UTF-16 代理对，emoji/扩展区字符不再出现孤立代理符）。**跨插件根因（ui-beautify 侧，v1.13.1）**：外部插件拿到的是守护式 dynamic ctx（CTX_VERBS 只放行 effect/on/once/provide/超时族），原 `ctx.reflect.provide('dock', …)` 会被拒 → `dock` 服务实际不存在，file-explorer/billing 的坞面板集成静默失效；已在提供端改为 `ctx.provide`（一并修复本插件 `dock` 集成真正可用的前提）。
-- **v1.10.0**：适配 DSH 0.1.2-rc.1 + 安全/正确性加固——① **封堵目录穿越**：`assertInsideWorkspace`/`assertNotWorkspaceRoot`/`assertNoSelfNesting` 比较前先 `resolve()` 词法归一化（原前缀字符串检查可被 `D:\ws\..\outside\f` 绕过）；② **版本令牌族分裂修复**：`FsInfo.version`（0.1.2-rc.1 `ctx.fs` 的不透明令牌）优先于 mtimeMs|size 回退（旧读法恒 null → 陈旧检查静默失效），`fsWrite` 改走 `ctx.fs`（resolve→stat→writeText→stat）与读操作同族令牌 + 原子写 + 沙箱围栏；③ 工作区字段漂移 `w.workspaceId`→`w.id`；④ 侧栏 AppFrame 定位去掉 `.pI_x6G_frame` 哈希类回退，改按稳定契约（`data-sidebar-collapsed`/`data-dragging` + `grid-template-columns` 内联样式）；⑤ 活动工作区探针取「选中会话行之前最后一个展开组」（多工作区不再跟随错误组）；⑥ 编辑器关闭时自移除 document 级 selectionchange 监听（防累积）；⑦ 空目录显示「（空目录）」空态；⑧ `dsh.client.inject` 幽灵条目清理、peer 升至 `^0.1.2-rc.1`。宿主接口逐项核对（ctx.fs/agents/workspaceRegistry/sandboxPolicy/事件/Remote 手工装饰器技巧）仅上述漂移；reveal-in-explorer 已不存在（回收站仍走独立 child_process，正确）。遗留：fsRename/fsCopy/fsMove/fsDelete/fsCreate 无 `dsh-fs` 等价 API，仍走 node:fs + 词法围栏（沙箱部署下五类操作不经 fs-sandbox 规范化围栏）。
-- **v1.9.20**：修复深色主题检测失配——宿主（dsh-client-ui-theme）的权威主题信号是 `<body data-ds-dark-theme>` 属性（"深色/浅色/跟随系统"即切换它），此前仅检测 `<html data-theme>`/`class`/`prefers-color-scheme`，手动深色时全部失配 → 深色卡片上整套套用浅色配色（正文 `#24292f`、关键字 `#cf222e`），表现为"深色下字色吃力"；现以 `body[data-ds-dark-theme]` 为首选信号（旧信号降级兜底），MutationObserver 同步观察 body 属性变化，深浅切换即时生效；浅色 hljs 配色同步换为 **VS Code Light+**（`#0000ff` 关键字、`#a31515` 字符串、`#008000` 注释、`#795e26` 函数、`#267f99` 类型、`#001080` 变量、`#098658` 数字、`#cd3131` 删除）；深色配色维持 v1.9.19 的 Dark+。
-- **v1.9.19**：深色模式预览配色与绘制顺序修复——①深色 hljs 调色板由 GitHub Dark 换为 **VS Code Dark+**（`themes/dark_plus.json`）：正文字 `#d4d4d4`、关键字/元信息 `#569cd6`、字符串 `#ce9178`、数字 `#b5cea8`、注释 `#6a9955`、函数 `#dcdcaa`、类/类型 `#4ec9b0`、变量/参数/属性 `#9cdcfe`、删除 `#f44747`；②**预览卡片创建时即打 `data-fexp-theme`**（此前仅在面板构建/主题切换时打标，卡片可能长期缺失标记、深色下整套落到浅色配色，正文 `#24292f` 在深色玻璃底上几乎不可读——即"深色下字色吃力"的主因）；③修复编辑器横向滚动时正文压行号条：内容列/token 为定位元素（无 z-index）按 DOM 树序画在 sticky 行号条之上，行号条提升 `z-index:2` 后文字从条下穿过。
-- **v1.9.18**：编辑器新增撤回/反撤回（VS Code 语义）——自建每文件操作历史（`editUndo`，保存/模式切换/关闭重开均保留，文件被外部修改时丢弃）：undo stop 分组（连续输入/删除同一锚点合并为一步，粘贴/剪切/回车/Tab/IME 整词/词删除各自一步，不按时间分段）；叠加**双区间记录**（旧区间=重做、新区间=撤销，配选区钳制的前后缀 diff，正确处理"插入与相邻字符相同"等情形）；撤销/重做恢复文本+光标/选区；跨保存可撤（保存=检查点）；工具栏新增「撤销/重做」按钮（随历史禁用）+ Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y（接管原生栈，含之前不可撤销的 Tab 缩进与 IME 整词提交）。
-- **v1.9.17**：修复编辑器光标在中文/全角/emoji 行内的横向错位——编辑器几何由"每字符 = 1 个等宽列"升级为**宽度感知**：ASCII 按实测 `editCharW`（DOM span 测量，替代 canvas，解析更可靠）、中日韩/全角/假名/谚文/emoji（含代理对）按实测 `editCjkW`（≈2 倍宽）累加，Tab 仍按 4 列网格步进；光标、选区底条、点击映射、IME 覆盖条共用同一几何，修复中文文档（如含中文 Markdown）中光标停在可见文字末尾左侧约 1~2 个汉字的错位。
-- **v1.9.16**：预览卡片/独立面板缩放重构（对齐 ui-beautify 卡片）——把手从卡片/面板内缘移出，改为**独立 overlay chrome 层**：边条 6px 跨骑边界（3px 内 + 3px 外）、两端让 12px，四角 12×12 外凸 6px，边角互不重叠；此前内贴式把手（边 6px/8px + 角 18×18，z-index 压在内容上）会遮挡代码视图底部的横向滚动条与「继续加载」区域，且左上/右上角块覆盖标题栏 × 关闭按钮（点 × 误触缩放）；平时透明仅光标、拖动中品牌色高亮；独立面板（无 ui-beautify 时）同规格：float 8 向 / right 仅 w 边 / middle 仅 e 边，方向随 dock 模式；有 ui-beautify 时面板 chrome 仍由宿主提供。
-- **v1.9.15**：编辑器底层重构（按 VS Code / Monaco 架构）——单一滚动容器承载行号/高亮/光标/选区（删除"透明 textarea 叠镜像高亮层"双坐标方案：该方案三代错位 bug：三体滚动累积漂移、行号列宽双倍计入、tab 步长 8/4 不一致）；行号列与正文解耦（sticky 固定左侧、随内容纵移、宽度变化不影响正文坐标）；光标/选区/鼠标点击/IME 覆盖的像素位置全部由同一套编辑器几何计算（等宽字符宽 canvas 测量 + tab 4 列步进 + 行起点数组二分），渲染与输入共用，从机制上杜绝错位；输入改为隐藏 textarea（2×2px 跟随光标，Monaco TextAreaInput 同思路），保留原生 undo/剪贴板/IME；IME 合成期间自绘覆盖条；hljs 行结果按行文本缓存（输入只重算变化行）；只读视图（截断/降级）与编辑器同构。修复编辑器行号与正文整体右偏、光标不在文字末尾/点击与输入错位（含此前修复未同步到安装副本导致的"修了还坏"排查）。
-- **v1.9.11**：修复编辑器光标错位——实时高亮编辑器（透明 textarea 叠镜像高亮层）两层横向坐标曾被「行号列宽双倍计入」（镜像容器被左移 `w`，行内又从 `w+12px` 起），可见文字整体比光标/点击坐标偏右一个行号列宽（默认 44px ≈ 6 字符），表现为光标不对齐文字末尾、输入字符出现在光标右侧；同时镜像层统一 `tab-size:4`（textarea 为 4、镜像默认 8，含 Tab 的行进一步漂移）。另修正 `package.json` 版本号滞后（代码注释已到 v1.9.10 未升版本）。
-- **v1.9.7**：审计加固——修复「继续加载」第二次起每次偏移多跳一段导致内容静默丢失（`offsetChars` 语义改为"下一段起始偏移"）；修复工作区拒绝跟随失效（`declinedFollowRoot` 从未被读取，编辑未保存时确认框每 800ms 轰炸）；Markdown 渲染修复两处 XSS（标题内联 HTML 未转义、链接 href 属性未转义可突破属性边界）；文件总行数统计按 `path@version` 缓存（大文件多次「继续加载」不再反复整文件重读）并修正尾换行文件的 off-by-one；工作区根目录禁止删除/重命名/移动；合并两套重复的工作区根探测逻辑（统一错误隔离）；删除死代码（未用图标 `chevronUp`/`eyeOff`/`code`/`text`/`plus`、未用常量、退役预览区 splitter 残骸）；**重做编辑器为 IDE 式实时高亮**——v1.9.9 的透明叠加层从不跟随输入重绘导致输入不可见，已重写为：透明 textarea 叠在虚拟化高亮层上，输入即实时语法高亮（客户端内联 highlight.js 11.12 共 34 种语言，与只读视图同版本同调用、高亮一致；`tools/inline-hljs.mjs` 生成内联区，升级 hljs 后重跑即可），行号随输入同步、滚动精确对齐，中文输入法合成期间不闪烁；长行横向滚动（不软换行，软换行留待后续按"逐行测量"增强）；**修复编辑器行号/对齐**——行号栏与高亮层不再用 transform 镜像滚动（曾导致行号只显示一部分、滚动脱节），改为原生滚动同步（scrollTop/scrollLeft 直赋、滚动条隐藏），行号栏宽度与文字偏移统一为 `max(44px, 14+位数×8)`（杜绝小文件文字压行号）；**修复光标与行号对不齐**——三体滚动同步（textarea/行号栏/高亮层）在行数多、滚动深时易累积错位，重构为单一镜像滚动容器：行号 span 与高亮 span 处于同一行结构、同一 scrollTop（行号列 `position:sticky` 固定左侧），对齐由构造保证；textarea 显式锁定 13px/20px 字体指标，排除字体度量差异；**修复浮层盖住设置弹窗**——设置弹窗被侧边栏层叠上下文困住、有效层级≈0，单纯降 z-index 无效，现检测 `sidebar.settings` 槽内 fixed 层并在设置打开时隐藏预览卡片/面板/菜单/帮助/Toast（关闭后原样恢复，未保存编辑保留），同时插件浮层 z-index 由 2147483xxx 降至 1000 以下（被应用对话框正确覆盖）。
-- **v1.9.x**：大版本——Markdown 渲染预览 + IDE 式实时高亮编辑（text-overlay 输入即高亮、`pre-wrap` 自动换行、行号与预览一致）、预览独立浮动卡片（拖动 / 四边四角缩放 / 双击最大化）、树内搜索（Ctrl+F）、快捷键帮助浮层（右上角、可拖动）、HIG 风格界面；服务端引入 `marked` + `highlight.js`（`lib/render.js`）。期间迭代：行视图改 table 布局消除换行重叠、卡片缩放 grip 修复、毛玻璃移除后恢复、移除「在资源管理器中显示」与「源码/纯文本」只读视图、编辑器整合取代独立编辑模式。
-- **v1.8.x**：安全加固（破坏性写操作限制在工作区根目录内）+ 颜色值 token 化重构。
-- **v1.7.x**：接入 ui-beautify 统一插件面板（卡片 / 经典模式统一管理）、移除悬浮球、健壮性优化（目录缓存上限、blur 竞态、面板重建清理、拖动跟随）。
-- **v1.6.x**：适配 ui-beautify 卡片模式（停靠卡标签面板、⧉ 浮动、双向状态同步、经典模式回退）。
-- **v1.5.x**：跨平台健壮性 + 拖放移动 + 系统回收站（Win PowerShell / macOS Finder / Linux gio，带内置回收站兜底并自动清理）；修复大文件预览、二进制识别、浮动面板打不开、拖放落下/高亮等。
-- **v1.4.x**：删除到回收站 + 实时刷新。
-- **v1.3.x**：文件内联编辑与 IDE 式右键菜单（新建/重命名/复制/粘贴/复制路径 + 磁盘冲突检测）。
-- **v1.2.x**：支持 dsh 官方 bundle 安装（`dsh.bundle.patch` + 自带 `cordis.patch.yml`）；typert-protocol 改 peerDependency 保证与 gateway 共享模块实例。
-- **v1.1.x**：v2 架构重写（Client `$mount` 自挂载命名空间、Host 用 `TypertRemoteService` 自动注册），修复 v1 加载失败。
-- **v1.0.x**：v1 初版，已被 v1.1 取代。
+改代码后：Client 改动刷新页面即可生效，Host 改动需要重启 DSH，全程无需构建。
+
+## 更新日志
+
+### v1.10.2
+- 变更：接入 ui-beautify 的 `dock` API v2 规范写法（`ctx.inject`），宿主热重载或卸载时自动重注册，并保留守护 ctx 的幂等退化绑定器。
+
+### v1.10.1
+- 修复：保存的版本校验改为原子写入，外部改动不再被静默覆盖；新建文件走原子创建。
+- 修复：工作区包含性检查升级为词法加真实路径双层校验，封堵符号链接与 Windows junction 逃逸。
+- 修复：「继续加载」在文件恰好等于窗口长度时误报截断；剪贴板清空后「粘贴」仍可点却无操作；重命名后编辑 / 预览 / 剪贴板路径不跟随迁移。
+- 修复：保存飞行中关闭或切换预览时旧回调复活、停靠面板顶部偏移硬编码、工作区跟随抖动等十余项健壮性问题。
+
+### v1.10.0
+- 变更：适配 DSH 0.1.2-rc.1 —— 封堵目录穿越、统一版本令牌族、修正工作区字段漂移、侧栏定位改用稳定契约、活动工作区探针取正确分组。
+
+### v1.9.20
+- 修复：深色主题检测改以 `body[data-ds-dark-theme]` 为准，手动切深色时不再套用浅色配色；浅色配色换成 VS Code Light+。
+
+### v1.9.19
+- 修复：深色配色换成 VS Code Dark+；预览卡片创建时即打主题标记；编辑器行号条的层级修正，文字不再压在行号上。
+
+### v1.9.18
+- 新增：编辑器撤销 / 重做（VS Code 语义，保存视为检查点，跨保存可撤），配工具栏按钮与 `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y`。
+
+### v1.9.17
+- 修复：光标与选区在中文、全角、emoji 行内的横向错位（改为按字符实际宽度计算几何）。
+
+### v1.9.16
+- 变更：预览卡片与独立面板的缩放把手改为独立浮层，不再遮挡滚动条与关闭按钮。
+
+### v1.9.15
+- 变更：编辑器底层重构为单一滚动容器，行号列与正文解耦，光标 / 选区 / 点击 / 输入法的位置由同一套几何计算。
+
+### v1.9.11
+- 修复：编辑器光标错位（行号列宽被重复计入导致文字整体右偏）。
+
+### v1.9.7
+- 修复：「继续加载」偏移跳段导致内容静默丢失、工作区拒绝跟随失效后每 800ms 重复弹窗、Markdown 渲染的两处 XSS、工作区根目录可被删除或改名、浮层盖住设置弹窗。
+- 变更：编辑器重做为输入即实时语法高亮。
+
+### v1.9.x
+- 新增：Markdown 渲染预览、IDE 式实时高亮编辑、预览独立浮动卡片、树内搜索、快捷键帮助浮层、HIG 风格界面。
+
+### v1.8.x
+- 变更：破坏性写操作限制在工作区根目录内；颜色值 token 化。
+
+### v1.7.x
+- 新增：接入 ui-beautify 的统一插件面板；移除悬浮球。
+
+### v1.6.x
+- 新增：适配 ui-beautify 卡片模式（停靠卡标签面板、浮动、双向状态同步、经典模式回退）。
+
+### v1.5.x
+- 新增：跨平台回收站、拖放移动，修复大文件预览、二进制识别与浮动面板打不开等问题。
+
+### v1.4.x
+- 新增：删除到回收站与实时刷新。
+
+### v1.3.x
+- 新增：文件内联编辑与 IDE 式右键菜单（新建 / 重命名 / 复制 / 粘贴 / 复制路径，含磁盘冲突检测）。
+
+### v1.2.x
+- 变更：支持 dsh 官方 bundle 安装；`typert-protocol` 改为 peerDependency，保证与 gateway 共享模块实例。
+
+### v1.1.x
+- 变更：v2 架构重写（Client 用 `$mount` 自挂载命名空间、Host 用 `TypertRemoteService` 自动注册）。
+
+### v1.0.x
+- 初版，已被 v1.1 取代。
 
 ## License
 
