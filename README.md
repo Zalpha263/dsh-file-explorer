@@ -38,7 +38,7 @@ dsh plugin --profile web update dsh-file-explorer
 dsh plugin --profile web remove dsh-file-explorer
 ```
 
-装完**重启 DSH**，会话标题栏右侧会出现「📁 文件」按钮；如果同时装了 ui-beautify，入口会统一收进「🧩 插件面板」，本插件不再占用标题栏位置。
+装完**重启 DSH**，会话标题栏右侧会出现「📁 文件」按钮；如果同时装了 ui-beautify，入口会统一收进 **DSH 官方右侧栏**的一个标签页（右侧栏「开始」页上的入口胶囊，或标签条的 `+`），本插件不再占用标题栏位置。
 
 ## 使用说明
 
@@ -84,6 +84,12 @@ dsh plugin --profile web remove dsh-file-explorer
 改代码后：Client 改动刷新页面即可生效，Host 改动需要重启 DSH，全程无需构建。
 
 ## 更新日志
+
+### v1.11.0
+- **变更：集成契约从 ui-beautify 的 `dock`（v2）改为 `sidebarPanel`（v1）。** ui-beautify 3.0.0 移除了自研「插件面板」宿主——它拖动卡片时要改写官方 `AppFrame` 的 `grid-template-columns`，而那正是官方右侧栏通过 `ctx.layout.openRightbar()` 申领的同一份资源，两边互相覆盖就是"面板与侧边栏冲突"的根因。现在本插件注册成 **DSH 官方右侧栏的一个标签页**：标签条、浮动、分屏、每会话独立状态全部由官方负责，引导页上多一个「文件浏览器」入口胶囊。
+- 适配：面板正文在右侧栏里按**面板自身宽度**响应式（不再按窗口宽度）。宿主在面板小于 420px 时加 `data-dsh-narrow`，工具栏的文本标签在窄宽度下收起只留图标（`title` 仍提供 tooltip），树行文件名走省略号截断而不是换行，行内文件大小在窄宽度下隐藏。
+- 变更：`subscribe` 被移除（官方右侧栏没有对应接口，也不需要——标签条与引导页本身就是入口）；注册期间标题栏按钮保持隐藏。
+- 说明：未安装 ui-beautify 或 ui-beautify < 3.0.0 时，本插件退回自带的独立浮动面板与标题栏入口，行为不变。
 
 ### v1.10.2
 - 变更：接入 ui-beautify 的 `dock` API v2 规范写法（`ctx.inject`），宿主热重载或卸载时自动重注册，并保留守护 ctx 的幂等退化绑定器。
