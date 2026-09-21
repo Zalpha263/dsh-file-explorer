@@ -1,6 +1,6 @@
 {
   "name": "dsh-file-explorer",
-  "version": "1.11.0",
+  "version": "1.11.1",
   "description": "Persistent web file explorer: lazy directory tree, search/filter (Ctrl+F), preview + inline editing (Markdown render, syntax highlight, line numbers, virtualized large files), IDE-style context menu (new/rename/copy/paste/delete-to-trash/paths), drag-and-drop move, dock/float panel, workspace follow.",
   "type": "module",
   "main": "lib/index.js",
@@ -18,7 +18,7 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-typert-protocol": "^0.1.2-rc.1"
+    "@deepseek-ai/dsh-typert-protocol": "^0.1.5-rc.2"
   },
   "dependencies": {
     "highlight.js": "^11.12.0",

@@ -28,7 +28,7 @@
 
 ## 安装
 
-前置要求是 DSH `0.1.1-rc.2`（或兼容的 `0.1.x` 系列），Windows / macOS / Linux 都支持（路径分隔符、大小写敏感、回收站策略按平台自适应），官方安装方式还需要 [pnpm](https://pnpm.io/zh/)（`npm install -g pnpm`）。
+前置要求是 DSH `0.1.5-rc.2`（或兼容的 `0.1.x` 系列），Windows / macOS / Linux 都支持（路径分隔符、大小写敏感、回收站策略按平台自适应），官方安装方式还需要 [pnpm](https://pnpm.io/zh/)（`npm install -g pnpm`）。
 
 ```bash
 dsh plugin --profile web add github:Zalpha263/dsh-file-explorer
@@ -57,7 +57,7 @@ dsh plugin --profile web remove dsh-file-explorer
 
 ## 安全边界（重要）
 
-编辑保存、新建、重命名、复制、移动、删除这些写操作由 Host 半区直接通过 Node 的 `fs/promises` 执行，并且**限制在当前工作区根目录内**——工作区之外的写、删、改名、移动都会被拒绝（只读的浏览与预览不受这个限制），工作区根目录本身也禁止删除、重命名和移动。这是刻意的设计（这是一个由用户手动操作的文件管理器），但它**不受 DSH 的 read-only / workspace-write 策略约束**，请不要在不可信环境下使用。
+所有写操作都**限制在当前工作区根目录内**——工作区之外的写、删、改名、移动都会被拒绝（只读的浏览与预览不受这个限制），工作区根目录本身也禁止删除、重命名和移动。这是刻意的设计（这是一个由用户手动操作的文件管理器）。两条写入路径的约束并不相同，请按需评估：**保存（`fsWrite`）与新建文件（`fsCreate` 的文件分支）走宿主的 `ctx.fs` 服务**，因此同时受 DSH 会话沙箱策略（read-only / workspace-write / danger-full-access）约束，会记录 `fs/observed`；**重命名、复制、移动、删除、新建目录**走 Host 半区的 `node:fs`，只受本插件的工作区包含性检查约束，不经过宿主沙箱与观察链。
 
 ## 常见问题
 
@@ -73,17 +73,22 @@ dsh plugin --profile web remove dsh-file-explorer
 
 ## 兼容性
 
-目标版本是 DSH `0.1.0-rc.7` 及兼容的 `0.1.x` 系列；部分 CSS 选择器（例如侧边栏宽度探测用的 `.pI_x6G_frame`）针对该版本的客户端产物编写，**DSH 大版本升级后可能需要复核**。Host 半区依赖 dsh 自带的 `@deepseek-ai/dsh-typert-protocol`（peer 依赖），**不要**单独安装该包的独立副本，否则 Remote 桥会失效。大目录（例如 `node_modules`）整目录复制或跨设备移动会明显变慢，这属于正常现象。
+目标版本是 DSH `0.1.5-rc.2` 及兼容的 `0.1.x` 系列；侧边栏几何探测已改用稳定的 `[data-sidebar-collapsed]` / `[data-dragging]` 契约，不再依赖构建产物里的哈希类名。Host 半区依赖 dsh 自带的 `@deepseek-ai/dsh-typert-protocol`（peer 依赖），**不要**单独安装该包的独立副本，否则 Remote 桥会失效。大目录（例如 `node_modules`）整目录复制或跨设备移动会明显变慢，这属于正常现象。
 
 ## 开发者
 
-**Host 半区**（`lib/index.js`）：`FileExplorerService` 注册 `fileExplorer` 远程服务（`fsList` / `fsRead` / `fsWrite` / `fsCreate` / `fsRename` / `fsCopy` / `fsDelete` / `fsMove` / `wsRoot` / `wsList`），读操作走 DSH 的 `fs` 服务、写操作直连 `node:fs/promises`，删除按平台调用系统回收站并在失败时落到内置回收站，`fsMove` 处理跨设备（EXDEV）的复制加删除回退，另通过 `agent/status` 与 `session/event` 维护最近活跃的工作区。
+**Host 半区**（`lib/index.js`）：`FileExplorerService` 注册 `fileExplorer` 远程服务（`fsList` / `fsRead` / `fsWrite` / `fsCreate` / `fsRename` / `fsCopy` / `fsDelete` / `fsMove` / `wsRoot` / `wsList`），读操作与保存/新建文件走 DSH 的 `fs` 服务（受会话沙箱策略约束），重命名/复制/移动/删除/建目录直连 `node:fs/promises`，删除按平台调用系统回收站并在失败时落到内置回收站，`fsMove` 处理跨设备（EXDEV）的复制加删除回退，另通过 `agent/status` 与 `session/event` 维护最近活跃的工作区。
 
 **Client 半区**（`lib/client.js`）：`__ModuleLoader__.load` 加载，用 `ctx.remote.$mount` 自挂载 `fileExplorer` 命名空间，全部界面用原生 DOM 渲染（零 React hooks），路径拼接、相对路径与大小写比较按 `platform` 自适应；检测到 ui-beautify 的 `dock` 服务时注册为插件面板，用的是规范写法 `ctx.inject(['dock'], (c) => …)`（规范见 [dsh-ui-beautify/docs/plugin-panel-integration.md](https://github.com/Zalpha263/dsh-ui-beautify/blob/main/docs/plugin-panel-integration.md)）。
 
 改代码后：Client 改动刷新页面即可生效，Host 改动需要重启 DSH，全程无需构建。
 
 ## 更新日志
+
+### v1.11.1
+- **性能：渲染管线改为按需加载。** Host 半区原来在模块顶层静态 `import './render.js'`，连带加载 `marked` + 完整 `highlight.js`（约 3.3MB）；DSH 启动时会 import 每个插件的 Host 半区，实测每次冷启动多付约 200ms。现在改为首次预览/读取时动态 `import()` 并缓存。功能与输出完全不变。
+- **修复：宿主 fs 写入改用会话沙箱策略。** `fsWrite` / `fsCreate(file)` 原来不传第 5 个 `sandboxPolicy` 参数，宿主会退回「部署默认策略 + 部署 fallback root」，与插件按会话 cwd 做的边界检查可能不一致（会话设为 read-only 时写入被放行，或 cwd 与 fallback root 不同时合法写入被拒）。现在按当前会话 `ctx.sandboxPolicy.resolve({ session })` 裁决，并把 `FS_SANDBOX_DENIED` 转成可读提示。
+- 变更：peer 依赖对齐 `@deepseek-ai/dsh-typert-protocol ^0.1.5-rc.2`。
 
 ### v1.11.0
 - **变更：集成契约从 ui-beautify 的 `dock`（v2）改为 `sidebarPanel`（v1）。** ui-beautify 3.0.0 移除了自研「插件面板」宿主——它拖动卡片时要改写官方 `AppFrame` 的 `grid-template-columns`，而那正是官方右侧栏通过 `ctx.layout.openRightbar()` 申领的同一份资源，两边互相覆盖就是"面板与侧边栏冲突"的根因。现在本插件注册成 **DSH 官方右侧栏的一个标签页**：标签条、浮动、分屏、每会话独立状态全部由官方负责，引导页上多一个「文件浏览器」入口胶囊。
