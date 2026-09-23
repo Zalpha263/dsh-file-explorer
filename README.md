@@ -100,6 +100,9 @@ dsh plugin --profile web remove dsh-file-explorer
 
 ## 更新日志
 
+### v1.11.2
+- 修复：DSH 0.1.7 起 strict codec 必须带 `create()` 工厂（运行时改为 `codec.create().parse(value)`，旧的 `codec.schema` 字段已无人读取）。原写法会让 `ctx.remote.$mount()` 抛 `strict codec has no create() factory`，整个 Remote namespace 挂不上，面板与设置节随之消失。`strictCodec()` 改为提供 `create`。peer 对齐 `^0.1.7-alpha.2`。
+
 ### v1.11.1
 - 性能：渲染管线（`marked` + 完整 `highlight.js`，约 3.3MB）改为首次使用时按需加载，DSH 冷启动少付约 200ms。
 - 修复：宿主 `fs` 写入改用当前会话的沙箱策略（原来会退回部署默认策略，与工作区边界检查不一致），并把 `FS_SANDBOX_DENIED` 转成可读提示；peer 对齐 `^0.1.5-rc.2`。
