@@ -100,6 +100,10 @@ dsh plugin --profile web remove dsh-file-explorer
 
 ## 更新日志
 
+### v1.11.3
+- 迁移：对齐 DSH `0.1.7-rc.1`（自 `0.1.7-alpha.2`）。本插件用到的 host 服务 `fs` / `agents` / `sandboxPolicy` / `workspaceRegistry`、slot 注入（`slots.inject` / `slots.register`）与 `ctx.remote.$mount` 的 CONTRIBUTION 校验在 `alpha.2 → rc.1` 之间**逐字节未变**；rc.1 的 `@deepseek-ai/dsh-client-ui-primitives` 只有加法（+3 导出、5 个新文件、4 个**可选** props），旧调用点不受影响，本插件不采用。无需改代码，peer 对齐 `^0.1.7-rc.1`。
+- 验证：隔离 `DSH_HOME` 冷启动 rc.1 → 模块已注册、564KB 客户端产物 HTTP 200 且含 `__ModuleLoader__.load`；`node --check` 通过。
+
 ### v1.11.2
 - 修复：DSH 0.1.7 起 strict codec 必须带 `create()` 工厂（运行时改为 `codec.create().parse(value)`，旧的 `codec.schema` 字段已无人读取）。原写法会让 `ctx.remote.$mount()` 抛 `strict codec has no create() factory`，整个 Remote namespace 挂不上，面板与设置节随之消失。`strictCodec()` 改为提供 `create`。peer 对齐 `^0.1.7-alpha.2`。
 
