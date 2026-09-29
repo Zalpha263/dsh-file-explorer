@@ -1,6 +1,6 @@
 # dsh-file-explorer
 
-DSH Web 界面里的文件浏览器：不离开聊天页就能浏览工作区文件、预览和编辑内容，面板可以停靠也可以拖成浮动窗口。
+DSH Web 界面里的文件浏览器：不离开聊天页就能浏览工作区文件、预览和编辑内容。面板是 **DSH 官方右侧栏**的一个标签页——停靠、浮出成独立窗口、分屏都由官方标签条负责。
 
 ## 能做什么
 
@@ -46,9 +46,8 @@ DSH Web 界面里的文件浏览器：不离开聊天页就能浏览工作区文
 
 | 控件 / 操作 | 作用 |
 | --- | --- |
-| 右侧 / 中间 / 浮动 | 切换停靠方式；「右侧 / 中间」模式下拖边缘调整宽度 |
-| 标题栏拖动 | 浮动模式下移动面板 |
-| 面板四边 / 四角 | 浮动模式下自由调整大小 |
+| 官方标签条 | 面板即官方右侧栏标签页：拖动标签可分屏、可浮出成独立窗口（官方能力） |
+| 标签 chip 与标签菜单 | 关闭面板（标签正文里不再有面板自带的 × 按钮） |
 | ↻ 刷新 | 重新加载当前目录 |
 | 👁 隐藏 | 显示 / 隐藏 `node_modules`、`.git` 等条目 |
 | 点目录 / 点文件 / ✕ | 展开目录 / 打开文件预览 / 关闭预览 |
@@ -73,7 +72,7 @@ dsh plugin --profile web install
 dsh plugin --profile web remove dsh-file-explorer
 ```
 
-装完**重启 DSH**。入口有两种：只装本插件时，会话标题栏右侧会出现「📁 文件」按钮；同时装了 ui-beautify 时，入口统一收进 **DSH 官方右侧栏**的标签页（右侧栏「开始」页的入口胶囊，或标签条的 `+`），本插件不再占用标题栏位置。Host 改动重启 DSH，Client 改动刷新页面。
+装完**重启 DSH**。入口统一在 **DSH 官方右侧栏**：右侧栏「开始」页的入口胶囊（order 20），或标签条的 `+`。**不再有会话标题栏按钮**，也不需要 ui-beautify —— v1.12.0 起本插件直接调官方 `sidebarRightTabs` / `slots` 注册标签页。Host 改动重启 DSH，Client 改动刷新页面。
 
 **桌面版（DeepSeek Harness 桌面应用）**：`desktop` profile 由桌面应用独占，`dsh plugin --profile desktop ...` 会被 CLI 直接拒绝（`profile "desktop" is managed exclusively by the Electron application`）。请在桌面应用侧边栏的**插件**页里用**绝对路径**添加本插件目录（或 GitHub 仓库地址），装完重启应用生效。桌面应用自带 Node / pnpm 运行时并走应用内更新（不依赖 npm 全局安装），它的 DSH 版本可能与全局 CLI 不同（实测桌面 `0.2.0-rc.1`、全局 CLI `0.1.7-rc.2`），本插件对两者都通过兼容检查。
 
@@ -97,10 +96,17 @@ dsh plugin --profile web remove dsh-file-explorer
 ## 开发者
 
 - **Host 半区**（`lib/index.js`）：`FileExplorerService` 注册 `fileExplorer` 远程服务（`fsList` / `fsRead` / `fsWrite` / `fsCreate` / `fsRename` / `fsCopy` / `fsDelete` / `fsMove` / `wsRoot` / `wsList`）。读、保存、新建文件走 DSH 的 `fs` 服务；重命名 / 复制 / 移动 / 删除 / 建目录直连 `node:fs/promises`；删除按平台调用系统回收站并在失败时落到内置回收站；`fsMove` 处理跨设备（EXDEV）的复制加删除回退。渲染管线（`marked` + `highlight.js`）在首次预览时才动态加载，避免拖慢 DSH 启动。
-- **Client 半区**（`lib/client.js`）：`__ModuleLoader__.load` 加载，用 `ctx.remote.$mount` 自挂载 `fileExplorer` 命名空间，界面全部用原生 DOM 渲染（零 React hooks）；检测到 ui-beautify 提供的 `sidebarPanel` 服务时注册成官方右侧栏标签页，否则退回自带浮动面板。面板接入规范见 [dsh-ui-beautify/docs/plugin-panel-integration.md](https://github.com/Zalpha263/dsh-ui-beautify/blob/main/docs/plugin-panel-integration.md)。
+- **Client 半区**（`lib/client.js`）：`__ModuleLoader__.load` 加载，用 `ctx.remote.$mount` 自挂载 `fileExplorer` 命名空间，界面全部用原生 DOM 渲染（零 React hooks）；用官方 `ctx.sidebarRightTabs.register({ id, kind, priority: 'extension', title, guide })` + `ctx.slots.register({ name: 'sidebar.right.pane.tab', key: 'file-explorer' }, Body)` 注册成官方右侧栏标签页，Body 里挂载既有的纯 DOM 面板（接入规范见 `@deepseek-ai/dsh-client-ui-sidebar-right` 的 README「扩展席位」）。
 - 依赖 dsh 自带的 `@deepseek-ai/dsh-typert-protocol`（peer），**不要**单独安装该包的副本，否则 Remote 桥会失效。改代码后：Client 刷新页面，Host 重启 DSH，全程无需构建。
 
 ## 更新日志
+
+### v1.12.0
+- **改造：只走官方右侧栏链路，删除 ui-beautify 依赖与标题栏入口**。此前面板经 ui-beautify 的 `sidebarPanel` 服务注册，**关掉 / 卸载 ui-beautify 后右侧栏没有入口**，只剩会话标题栏的「📁 文件」按钮与自带独立面板。现在直接调官方服务：`ctx.sidebarRightTabs.register({ id: 'file-explorer', kind: 'file-explorer', priority: 'extension', title, guide })` + `ctx.slots.register({ name: 'sidebar.right.pane.tab', key: 'file-explorer' }, Body)`，Body 内挂载既有的纯 DOM 面板（`mountDockHost`）。服务由 `@deepseek-ai/dsh-web-app` 的 `ui-sidebar-right` 行提供，与 ui-beautify 无关。
+- 删除：`ctx.inject(['sidebarPanel'])` 可选依赖、`internal/service` 事件 + 1s 兜底轮询的幂等绑定器、会话标题栏「📁 文件」入口（`HeaderEntry` + `entryListeners`）、`toggleOpen`（其唯一调用者就是那个按钮）。
+- 标签正文里不再渲染面板自带的「×」（关闭交给官方标签条）。
+- 已知遗留（下一轮清理）：经典独立面板机制（`shell.overlay` 宿主、停靠切换、缩放 chrome、标题栏拖拽）现已不可达，但保留为标签卸载后的 refs 回指目标。
+- 验证：官方服务桩契约 harness（注册形状 / 失败路径 / 拆卸）+ 真实 `0.2.0-rc.1` 宿主**移除 ui-beautify 后**的加载实测。
 
 ### v1.11.4
 - **适配桌面版**：peer 由 `^0.1.7-rc.1` 放宽为 **`>=0.1.7-rc.1 <0.3.0`**。桌面应用跑 DSH `0.2.0-rc.1`，旧范围上界 `<0.2.0-0` 不含它，而应用自有 profile 对 peer 不兼容的 bundle **静默跳过、不报错**。放宽后同时覆盖 web 宿主 `0.1.7-rc.2` 与桌面 `0.2.0-rc.1`。
