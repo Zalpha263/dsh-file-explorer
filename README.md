@@ -57,7 +57,7 @@ DSH Web 界面里的文件浏览器：不离开聊天页就能浏览工作区文
 
 ## 安装
 
-要求：DSH `0.1.5-rc.2`（或兼容的 `0.1.x` 系列）与 [pnpm](https://pnpm.io/zh/)（`npm install -g pnpm`）。Windows / macOS / Linux 都支持，路径分隔符、大小写敏感与回收站策略按平台自适应。
+要求：DSH `>=0.1.7-rc.1 <0.3.0`（已在 `0.1.7-rc.2`（web 宿主）与 `0.2.0-rc.1`（桌面应用）上实测：兼容检查通过、组成解析通过、Host 激活、客户端产物注册成功）与 [pnpm](https://pnpm.io/zh/)（`npm install -g pnpm`）。Windows / macOS / Linux 都支持，路径分隔符、大小写敏感与回收站策略按平台自适应。
 
 ```bash
 # 发布态：钉死提交，最稳定
@@ -74,6 +74,8 @@ dsh plugin --profile web remove dsh-file-explorer
 ```
 
 装完**重启 DSH**。入口有两种：只装本插件时，会话标题栏右侧会出现「📁 文件」按钮；同时装了 ui-beautify 时，入口统一收进 **DSH 官方右侧栏**的标签页（右侧栏「开始」页的入口胶囊，或标签条的 `+`），本插件不再占用标题栏位置。Host 改动重启 DSH，Client 改动刷新页面。
+
+**桌面版（DeepSeek Harness 桌面应用）**：`desktop` profile 由桌面应用独占，`dsh plugin --profile desktop ...` 会被 CLI 直接拒绝（`profile "desktop" is managed exclusively by the Electron application`）。请在桌面应用侧边栏的**插件**页里用**绝对路径**添加本插件目录（或 GitHub 仓库地址），装完重启应用生效。桌面应用自带 Node / pnpm 运行时并走应用内更新（不依赖 npm 全局安装），它的 DSH 版本可能与全局 CLI 不同（实测桌面 `0.2.0-rc.1`、全局 CLI `0.1.7-rc.2`），本插件对两者都通过兼容检查。
 
 ## 安全边界（重要）
 
