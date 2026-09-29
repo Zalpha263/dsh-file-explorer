@@ -100,6 +100,11 @@ dsh plugin --profile web remove dsh-file-explorer
 
 ## 更新日志
 
+### v1.11.4
+- **适配桌面版**：peer 由 `^0.1.7-rc.1` 放宽为 **`>=0.1.7-rc.1 <0.3.0`**。桌面应用跑 DSH `0.2.0-rc.1`，旧范围上界 `<0.2.0-0` 不含它，而应用自有 profile 对 peer 不兼容的 bundle **静默跳过、不报错**。放宽后同时覆盖 web 宿主 `0.1.7-rc.2` 与桌面 `0.2.0-rc.1`。
+- 走廊核对（`0.1.7-rc.1 → 0.1.7-rc.2 → 0.2.0-rc.1`）：本插件用到的 `fs`（`stat` / `lstat` / `readText` / `writeText`）、`agents`、`sandboxPolicy`、`workspaceRegistry`、`slots.inject` / `slots.register`、`ctx.remote.$mount` 的 CONTRIBUTION 校验**全部未变**，无需改代码。走廊里 `client-ui-primitives` 的破坏性改动（移除 `OnboardingSurface`）本插件未引用。
+- 桌面版安装方式：`desktop` profile 由桌面应用独占，`dsh plugin --profile desktop ...` 会被 CLI 拒绝；请在桌面应用的**插件**页用**绝对路径**添加本插件目录。
+
 ### v1.11.3
 - 迁移：对齐 DSH `0.1.7-rc.1`（自 `0.1.7-alpha.2`）。本插件用到的 host 服务 `fs` / `agents` / `sandboxPolicy` / `workspaceRegistry`、slot 注入（`slots.inject` / `slots.register`）与 `ctx.remote.$mount` 的 CONTRIBUTION 校验在 `alpha.2 → rc.1` 之间**逐字节未变**；rc.1 的 `@deepseek-ai/dsh-client-ui-primitives` 只有加法（+3 导出、5 个新文件、4 个**可选** props），旧调用点不受影响，本插件不采用。无需改代码，peer 对齐 `^0.1.7-rc.1`。
 - 验证：隔离 `DSH_HOME` 冷启动 rc.1 → 模块已注册、564KB 客户端产物 HTTP 200 且含 `__ModuleLoader__.load`；`node --check` 通过。
