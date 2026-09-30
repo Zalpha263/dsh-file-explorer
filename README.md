@@ -101,6 +101,11 @@ dsh plugin --profile web remove dsh-file-explorer
 
 ## 更新日志
 
+### v1.12.1
+- **修复（桌面端右侧栏没有任何入口）**：v1.12.0 在 `apply` 时**一次性** `ctx.get("sidebarRightTabs")`，拿不到就直接放弃，注释里还写明「不需要 ctx.inject —— 服务始终存在」。但客户端各 entry 的 `apply` 顺序/并发**并不保证**：服务本身，以及 `sidebar.right.pane.tab` 槽位（由 `ui-sidebar-right` 自己 `slots.inject` 声明），都可能比本插件的 entry 晚一拍出现 —— 于是注册被静默丢弃，右侧栏「开始」页再也不出现「文件浏览器」胶囊，只在 console 留一行 warn。实测桌面端 `0.2.0-rc.2` 就是这样（`0.2.0-rc.1` 的加载实测通过，说明这是时序敏感的偶发路径，不是 API 变更：我逐行比对过 rc.1 与 rc.2 的 `dsh-client-ui-sidebar-right`，`register()` 的校验完全相同）。
+- 现在：`ctx.inject(["sidebarRightTabs"], …)` **依赖驱动**（服务出现即回调、消失即 dispose，宿主自己的插件也是这个写法）+ **有界重试**（0/50/120/300/700/1200/2000/3000/5000/8000 ms，槽位可能比服务更晚）+ **失败时打印一次可诊断的原因**（`attachHost` 内部改为记录 `lastAttachError`，不再每次尝试都刷 console，也不再把失败伪装成"服务不可用"）。经典面板与 `Ctrl+P` 入口不受影响。
+- 验证：`node --check`；逻辑与 billing 侧的同一处修复对称（同一个 `register` 契约、同一串重试）。
+
 ### v1.12.0
 - **改造：只走官方右侧栏链路，删除 ui-beautify 依赖与标题栏入口**。此前面板经 ui-beautify 的 `sidebarPanel` 服务注册，**关掉 / 卸载 ui-beautify 后右侧栏没有入口**，只剩会话标题栏的「📁 文件」按钮与自带独立面板。现在直接调官方服务：`ctx.sidebarRightTabs.register({ id: 'file-explorer', kind: 'file-explorer', priority: 'extension', title, guide })` + `ctx.slots.register({ name: 'sidebar.right.pane.tab', key: 'file-explorer' }, Body)`，Body 内挂载既有的纯 DOM 面板（`mountDockHost`）。服务由 `@deepseek-ai/dsh-web-app` 的 `ui-sidebar-right` 行提供，与 ui-beautify 无关。
 - 删除：`ctx.inject(['sidebarPanel'])` 可选依赖、`internal/service` 事件 + 1s 兜底轮询的幂等绑定器、会话标题栏「📁 文件」入口（`HeaderEntry` + `entryListeners`）、`toggleOpen`（其唯一调用者就是那个按钮）。
