@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "File Editor",
+    "description": "Adds editing to the official read-only preview: the Edit action in the preview header opens the same file address in an editor tab, saving with optimistic-concurrency protection and highlighting through the official shared highlighter."
+  }
+}

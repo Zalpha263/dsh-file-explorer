@@ -1,13 +1,14 @@
 {
   "name": "dsh-file-explorer",
-  "version": "1.12.1",
-  "description": "Persistent web file explorer: lazy directory tree, search/filter (Ctrl+F), preview + inline editing (Markdown render, syntax highlight, line numbers, virtualized large files), IDE-style context menu (new/rename/copy/paste/delete-to-trash/paths), drag-and-drop move, dock/float panel, workspace follow.",
+  "version": "2.0.0",
+  "description": "Editor add-on for the DSH web client's official read-only file preview: an Edit action in the preview header opens the same file address in an editor tab that writes back with optimistic-concurrency protection. Highlights with the official shared highlighter.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "dsh": {
     "client": {
@@ -18,24 +19,28 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-typert-protocol": ">=0.1.7-rc.1 <0.3.0"
+    "@deepseek-ai/dsh-typert-protocol": ">=0.2.0-rc.1 <0.3.0"
   },
-  "dependencies": {
-    "highlight.js": "^11.12.0",
-    "marked": "^18.0.11"
+  "devDependencies": {
+    "@deepseek-ai/dsh-typert-protocol": ">=0.2.0-rc.1 <0.3.0"
   },
   "keywords": [
     "dsh",
     "deepseek-harness",
     "web-ui",
-    "file-explorer",
+    "editor",
     "plugin"
   ],
   "license": "MIT",
   "files": [
     "lib",
+    "locale",
+    "test",
     "README.md",
     "LICENSE",
     "cordis.patch.yml"
-  ]
+  ],
+  "scripts": {
+    "test": "node test/host.test.mjs && node test/client-smoke.test.mjs"
+  }
 }
