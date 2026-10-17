@@ -1,9 +1,10 @@
 {
   "name": "dsh-file-explorer",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Editor add-on for the DSH web client's official read-only file preview: an Edit action in the preview header opens the same file address in an editor tab that writes back with optimistic-concurrency protection. Highlights with the official shared highlighter.",
   "type": "module",
   "main": "lib/index.js",
+  "icon": "./icon.svg",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
@@ -18,11 +19,14 @@
       "patch": "./cordis.patch.yml"
     }
   },
+  "engines": {
+    "dsh": ">=0.2.0-rc.1 <0.3.0-0"
+  },
   "peerDependencies": {
     "@deepseek-ai/dsh-typert-protocol": ">=0.2.0-rc.1 <0.3.0"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-typert-protocol": ">=0.2.0-rc.1 <0.3.0"
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.1"
   },
   "keywords": [
     "dsh",
@@ -36,6 +40,7 @@
     "lib",
     "locale",
     "test",
+    "icon.svg",
     "README.md",
     "LICENSE",
     "cordis.patch.yml"

@@ -77,14 +77,38 @@ function makeFsStub(state) {
 }
 
 function bootHost(state = {}) {
-  const opts = Object.assign({ hideFile: null, notText: null, streamOverride: null, denyWrite: null }, state)
+  const opts = Object.assign({ hideFile: null, notText: null, streamOverride: null, denyWrite: null, sessions: null, policyCalls: [] }, state)
   const ctx = new Context()
-  ctx.provide('sandboxPolicy', { workspaceRoot: TMP, resolve: () => ({ mode: 'workspace-write', root: TMP }) })
+  /* 会话策略桩：带 session 时返回该会话的 cwd 作为根（真实 dsh-sandbox-policy
+     就是这样把 session.header.cwd 当 workspace-write 边界的）。 */
+  ctx.provide('sandboxPolicy', {
+    workspaceRoot: TMP,
+    resolve: (request) => {
+      opts.policyCalls.push(request)
+      const session = request && request.session
+      const root = session && session.header && typeof session.header.cwd === 'string' ? session.header.cwd : TMP
+      return { mode: 'workspace-write', workspaceRoot: root, root }
+    }
+  })
+  /* sessions 服务桩：真实 dsh-session 的 `ctx.get('sessions').get(id)` 返回
+     live session（含 header.cwd），找不到返回 undefined。 */
+  ctx.provide('sessions', {
+    get: (id) => {
+      const map = opts.sessions
+      if (map === null || map === undefined) return undefined
+      if (typeof map.get === 'function') return map.get(id)
+      return map[id]
+    }
+  })
   ctx.provide('fs', makeFsStub(opts))
   apply(ctx)
   const svc = ctx.get('fileExplorer')
   assert.ok(svc, 'fileExplorer 服务未注册')
   return { ctx, svc, state: opts }
+}
+
+function makeSession(id, cwd) {
+  return { id, header: { cwd } }
 }
 
 async function seed() {
@@ -200,6 +224,56 @@ test('stat：返回版本与大小，供编辑页轮询外部改动', async () =
   const after = await svc.fsStat(file)
   assert.equal(after.version, read.version, 'stat 与 read 必须给出同一族的版本令牌（陈旧守卫依赖它）')
   await assert.rejects(() => svc.fsStat(path.join(TMP, 'nope.md')), /not found/)
+})
+
+test('会话：带 sessionId 时读/写/策略都取该会话的 cwd（两个不同 cwd 各用各的根）', async () => {
+  const dirA = path.join(here, '.tmp-session-a')
+  const dirB = path.join(here, '.tmp-session-b')
+  await fs.rm(dirA, { recursive: true, force: true })
+  await fs.rm(dirB, { recursive: true, force: true })
+  await fs.mkdir(dirA, { recursive: true })
+  await fs.mkdir(dirB, { recursive: true })
+  await fs.writeFile(path.join(dirA, 'a.md'), 'A\n', 'utf8')
+  await fs.writeFile(path.join(dirB, 'b.md'), 'B\n', 'utf8')
+  try {
+    const sessions = new Map([
+      ['sess-a', makeSession('sess-a', dirA)],
+      ['sess-b', makeSession('sess-b', dirB)]
+    ])
+    const { svc, state } = bootHost({ sessions })
+
+    /* 读：相对路径按各自会话的 cwd 解析，而不是"最近根会话"或部署默认根。 */
+    assert.equal((await svc.fsRead('a.md', undefined, 'sess-a')).text, 'A\n')
+    assert.equal((await svc.fsRead('b.md', undefined, 'sess-b')).text, 'B\n')
+    assert.equal((await svc.fsStat('a.md', 'sess-a')).type, 'file')
+
+    /* 写：A 会话写自己根内成功。 */
+    const wroteA = await svc.fsWrite(path.join(dirA, 'a.md'), 'A2\n', '', 'sess-a')
+    assert.ok(typeof wroteA.version === 'string')
+    assert.equal(await fs.readFile(path.join(dirA, 'a.md'), 'utf8'), 'A2\n')
+
+    /* A 会话写 B 的根被拒：边界取 A 的 cwd。 */
+    await assert.rejects(() => svc.fsWrite(path.join(dirB, 'b.md'), 'x', '', 'sess-a'), /不在当前工作区内/)
+    assert.equal(await fs.readFile(path.join(dirB, 'b.md'), 'utf8'), 'B\n')
+
+    /* B 会话写自己根内成功：该根在部署默认根 TMP 之外，若仍用 TMP 会误拒。 */
+    await svc.fsWrite(path.join(dirB, 'b.md'), 'B2\n', '', 'sess-b')
+    assert.equal(await fs.readFile(path.join(dirB, 'b.md'), 'utf8'), 'B2\n')
+
+    /* 沙箱策略必须拿到对应会话（不是"最近根会话"的猜测）。 */
+    assert.ok(state.policyCalls.some((request) => request && request.session && request.session.id === 'sess-a'), '策略未收到 sess-a')
+    assert.ok(state.policyCalls.some((request) => request && request.session && request.session.id === 'sess-b'), '策略未收到 sess-b')
+
+    /* 不传 sessionId 的旧调用保持 2.0.0 行为：根仍是 TMP → 会话目录在 TMP 外被拒。 */
+    await assert.rejects(() => svc.fsWrite(path.join(dirA, 'a.md'), 'old', ''), /不在当前工作区内/)
+    await svc.fsWrite(path.join(TMP, 'a.md'), '# 旧调用\n', '')
+
+    /* 带未知 sessionId 必须显式报错，绝不回落到"最近根会话"。 */
+    await assert.rejects(() => svc.fsWrite(path.join(TMP, 'a.md'), 'x', '', 'nope'), /session not found/)
+  } finally {
+    await fs.rm(dirA, { recursive: true, force: true })
+    await fs.rm(dirB, { recursive: true, force: true })
+  }
 })
 
 test.after(async () => {
