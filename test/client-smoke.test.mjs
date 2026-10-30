@@ -10,10 +10,11 @@
 //      正文 + 标签类型（keepMounted=true，不声明 patterns）
 //   ④ 「编辑」按钮 → ctx.sidebarRight.openResource(地址, { kind:'file-editor',
 //      params:{ absolutePath } })；地址编码与官方 dsh-util-workspace-path 对齐
-//   ⑤ 地址 ↔ 路径向量（`:`, 空格, 中文, `.`/`..`）与滚动同步纯函数
-//   ⑥ 编辑页：读文件（带 sessionId）→ 渲染行号与输入区 → 高亮 ~120ms 合并
-//      → Ctrl+S 用正确版本号 + sessionId 写回
+//   ⑤ 地址 ↔ 路径向量（`:`, 空格, 中文, `.`/`..`）
+//   ⑥ 编辑页：读文件（带 sessionId）→ 官方代码块结构（行号/换行/输入层）
+//      → 高亮 ~120ms 合并 → Ctrl+S 用正确版本号 + sessionId 写回
 //   ⑦ 轮询：每标签一个 interval、隐藏标签（tab.visible=false）暂停
+//   ⑧ 渲染契约：官方 code font token、行号 CSS counter、默认自动换行与切换
 //
 // 运行：node test/client-smoke.test.mjs
 
@@ -30,44 +31,27 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 /* ---------------- 最小 DOM ---------------- */
 function makeEl(tag) {
   const el = {
-    tagName: String(tag).toUpperCase(), children: [], style: {}, dataset: {}, handlers: {}, _text: '', _attrs: {},
-    value: '', disabled: false, spellCheck: true, scrollTop: 0, scrollLeft: 0, scrollHeight: 320, title: '',
-    classList: {
-      _s: new Set(),
-      add(...c) { c.forEach((x) => this._s.add(x)) },
-      remove(...c) { c.forEach((x) => this._s.delete(x)) },
-      toggle(c, on) { const v = on === undefined ? !this._s.has(c) : on; if (v) this._s.add(c); else this._s.delete(c); return v },
-      contains(c) { return this._s.has(c) }
-    },
-    get className() { return Array.from(this.classList._s).join(' ') },
-    set className(v) { this.classList._s = new Set(String(v).split(/\s+/).filter(Boolean)) },
+    tagName: String(tag).toUpperCase(),
+    children: [],
+    dataset: {},
+    _text: '',
     get textContent() { return this.children.length === 0 ? this._text : this._text + this.children.map((c) => c.textContent).join('') },
     set textContent(v) { this._text = String(v); this.children = [] },
     appendChild(c) { this.children.push(c); return c },
-    removeChild(c) { const i = this.children.indexOf(c); if (i >= 0) this.children.splice(i, 1); return c },
-    setAttribute(k, v) { this._attrs[k] = String(v) },
-    getAttribute(k) { return this._attrs[k] !== undefined ? this._attrs[k] : null },
-    addEventListener(k, fn) { (this.handlers[k] = this.handlers[k] || []).push(fn) },
-    removeEventListener() {},
-    dispatch(k, ev) { for (const fn of (this.handlers[k] || []).slice()) fn(Object.assign({ preventDefault() {}, stopPropagation() {}, target: this, currentTarget: this }, ev)) },
-    click() { this.dispatch('click') },
-    focus() {}, select() {}, setSelectionRange() {},
-    querySelector(sel) { return this.querySelectorAll(sel)[0] || null },
-    querySelectorAll(sel) {
-      const out = []
+    /* 客户端只查 style[data-plugin-css=...]；保持最小实现即可。 */
+    querySelector(sel) {
       const want = sel.replace(/^style\[data-plugin-css="([^"]+)"\]$/, '$1')
+      let hit = null
       const walk = (n) => {
+        if (hit !== null) return
         for (const c of n.children) {
-          if (sel.startsWith('style[')) { if (c.tagName === 'STYLE' && c.dataset.pluginCss === want) out.push(c) }
-          else if (sel.startsWith('.') && c.classList.contains(sel.slice(1))) out.push(c)
+          if (c.tagName === 'STYLE' && c.dataset.pluginCss === want) { hit = c; return }
           walk(c)
         }
       }
       walk(this)
-      return out
-    },
-    remove() {}, contains() { return true }, closest() { return null },
-    getBoundingClientRect() { return { left: 0, top: 0, width: 400, height: 300 } }
+      return hit
+    }
   }
   return el
 }
@@ -78,7 +62,6 @@ function makeDocument() {
   doc.createElement = (tag) => makeEl(tag)
   doc.createTextNode = (t) => { const el = makeEl('#text'); el.textContent = t; return el }
   doc.querySelector = (sel) => { for (const t of [doc.head, doc.body]) { const hit = t.querySelector(sel); if (hit) return hit } return null }
-  doc.addEventListener = () => {}
   return doc
 }
 
@@ -162,7 +145,6 @@ function loadBundle(primitives) {
   const intervals = []
   const window = {
     __ModuleLoader__: { load: (e) => { entry = e } },
-    addEventListener() {}, removeEventListener() {},
     setInterval: (fn, ms) => {
       const id = setInterval(fn, ms)
       intervals.push({ fn, ms, id })
@@ -174,17 +156,10 @@ function loadBundle(primitives) {
       clearInterval(id)
     },
     setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (id) => clearTimeout(id),
-    requestAnimationFrame: (fn) => setTimeout(() => fn(Date.now()), 0),
-    innerWidth: 1400, innerHeight: 900,
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} }
+    requestAnimationFrame: (fn) => setTimeout(() => fn(Date.now()), 0)
   }
   const React = {
-    createElement: (type, props, ...children) => ({ type, props: props || {}, children: children.flat().filter((c) => c !== null && c !== undefined && c !== false) }),
-    useMemo: (fn) => fn(), // 上面 mount 时会用真实 hooks 覆盖；这里只是兜底
-    useState: (v) => [v, () => {}],
-    useRef: (v) => ({ current: v }),
-    useCallback: (fn) => fn,
-    useEffect: () => {}
+    createElement: (type, props, ...children) => ({ type, props: props || {}, children: children.flat().filter((c) => c !== null && c !== undefined && c !== false) })
   }
   /* 组件的 hooks 必须落在**同一个**运行时里，否则用例驱动的是另一套空槽位，
      effect 永远不会执行（第一版就是这么把自己骗过去的）。 */
@@ -198,18 +173,18 @@ function loadBundle(primitives) {
     }
     return {}
   }
+  const copied = []
   const globals = {
     window, document,
-    navigator: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', clipboard: { writeText: () => Promise.resolve() } },
-    requestAnimationFrame: window.requestAnimationFrame,
-    localStorage: window.localStorage
+    navigator: { clipboard: { writeText: (value) => { copied.push(value); return Promise.resolve() } } },
+    requestAnimationFrame: window.requestAnimationFrame
   }
   // 在函数体内运行 bundle 源码，让 window.__ModuleLoader__.load 被调用
   const factory = new Function(...Object.keys(globals), SOURCE)
   factory(...Object.values(globals))
   assert.ok(entry !== null, 'bundle 未调用 __ModuleLoader__.load')
   const exported = entry.factory(requireStub)
-  return { entry, exported, document, hooks, intervals }
+  return { entry, exported, document, hooks, intervals, copied }
 }
 
 /** 官方高亮件的替身：语言表与 useCodeHighlighter 都要在（验证我们真用了官方接口）。 */
@@ -227,7 +202,7 @@ const ADDRESS = 'dsh-resource://file/session/sess-1/D:/DeepseekPlugin/notes/a.md
 const MAX_TEXT_BYTES = 2 * 1024 * 1024
 
 function makeHarness(opts = {}) {
-  const { exported, document, hooks, intervals } = loadBundle(opts.noPrimitives ? null : PRIMITIVES_STUB)
+  const { exported, document, hooks, intervals, copied } = loadBundle(opts.noPrimitives ? null : PRIMITIVES_STUB)
   const registered = []
   const opened = []
   const calls = []
@@ -279,7 +254,7 @@ function makeHarness(opts = {}) {
     sidebarRight: sidebarRight
   }
   return {
-    exported, ctx, document, hooks, intervals, registered, opened, calls, mounted,
+    exported, ctx, document, hooks, intervals, copied, registered, opened, calls, mounted,
     /** 让"晚到的槽位"出现（模拟 dsh-client-ui-sidebar-right 的 declaration）。 */
     declareSlot: (name) => {
       const cb = deferredSlots.get(name)
@@ -400,9 +375,6 @@ test('地址编解码：与官方 dsh-util-workspace-path 规则一致（:、空
   assert.equal(A.sessionFileAddress('sess-1', 'D:\\work\\a b.md'), 'dsh-resource://file/session/sess-1/D:/work/a%20b.md')
   assert.equal(A.sessionFileAddress('sess-1', './notes/../a.md'), 'dsh-resource://file/session/sess-1/notes/../a.md', '. 与 .. 原样保留')
 
-  assert.equal(A.fileAddressFor('sess-1', '', 'D:\\work\\a.md'), 'dsh-resource://file/session/sess-1/D:/work/a.md')
-  assert.equal(A.fileAddressFor('sess-1', 'D:/work', 'D:\\work\\sub\\..\\a.md'), 'dsh-resource://file/session/sess-1/sub/../a.md')
-  assert.equal(A.fileAddressFor('sess-1', 'D:/work', 'D:\\other\\a.md'), 'dsh-resource://file/session/sess-1/D:/other/a.md')
 
   assert.deepEqual(A.parseFileAddress('dsh-resource://file/session/sess-1/D:/work/a%20b.md'), { sessionId: 'sess-1', path: 'D:/work/a b.md' })
   assert.deepEqual(A.parseFileAddress('dsh-resource://file/session/sess-1/notes/%2E%2E/%E4%B8%AD.md'), { sessionId: 'sess-1', path: 'notes/../中.md' })
@@ -412,13 +384,68 @@ test('地址编解码：与官方 dsh-util-workspace-path 规则一致（:、空
   assert.equal(A.parseFileAddress('dsh-resource://file/session/sess-1'), null)
 })
 
-test('滚动同步纯函数：in-flow/内容坐标层绝不 translate，只有视口层反向平移', () => {
+test('渲染模型：行号宽度与末尾换行（editorLines / lineNumberWidth）', () => {
   const A = loadBundle(PRIMITIVES_STUB).exported.__test
-  assert.deepEqual(A.scrollOffsets('content', 120, 40), { x: 0, y: 0 })
-  assert.deepEqual(A.scrollOffsets('content', 999, 999), { x: 0, y: 0 })
-  assert.deepEqual(A.scrollOffsets('viewport', 120, 40), { x: -40, y: -120 })
-  assert.deepEqual(A.scrollOffsets('viewport', -5, -3), { x: 3, y: 5 })
-  assert.deepEqual(A.scrollOffsets('viewport', NaN, undefined), { x: 0, y: 0 })
+  assert.deepEqual(A.editorLines('a\nb\n'), { lines: ['a', 'b', ''], eofBlank: true, numberedCount: 2 })
+  assert.deepEqual(A.editorLines('a\nb'), { lines: ['a', 'b'], eofBlank: false, numberedCount: 2 })
+  assert.deepEqual(A.editorLines(''), { lines: [''], eofBlank: false, numberedCount: 1 })
+  assert.equal(A.lineNumberWidth(1), '2ch')
+  assert.equal(A.lineNumberWidth(9), '2ch')
+  assert.equal(A.lineNumberWidth(10), '2ch')
+  assert.equal(A.lineNumberWidth(99), '2ch')
+  assert.equal(A.lineNumberWidth(100), '3ch')
+  assert.equal(A.scrollOffsets, undefined, '旧的 transform 坐标换算已删除')
+})
+
+test('编辑页：默认自动换行，可切换为不换行（textarea 与高亮层同规则）', async () => {
+  const h = makeHarness({ fileText: 'one\n' })
+  await h.exported.apply(h.ctx)
+  const { inst } = await mountEditor(h)
+  const content = () => findNode(inst.tree, (n) => n.props && typeof n.props.className === 'string' && n.props.className.indexOf('dfe-content') === 0)
+  const input = () => findNode(inst.tree, (n) => n.props && n.props.className === 'dfe-input')
+  const wrapBtn = () => findNode(inst.tree, (n) => n.props && n.props['data-dfe-tool'] === 'wrap')
+  assert.ok(content().props.className.includes('dfe-wrap'), '默认应开启自动换行')
+  assert.equal(input().props.wrap, 'soft')
+  assert.equal(wrapBtn().props['aria-pressed'], 'true')
+  wrapBtn().props.onClick()
+  await sleep(10)
+  inst.render()
+  assert.ok(content().props.className.includes('dfe-nowrap'), '切换后应关闭自动换行')
+  assert.equal(input().props.wrap, 'off')
+  assert.equal(wrapBtn().props['aria-pressed'], 'false')
+  wrapBtn().props.onClick()
+  await sleep(10)
+  inst.render()
+  assert.ok(content().props.className.includes('dfe-wrap'))
+  inst.unmount()
+})
+
+test('编辑页：代码块横幅显示语言标签，复制按钮复制当前缓冲', async () => {
+  const h = makeHarness({ fileText: 'one\n' })
+  await h.exported.apply(h.ctx)
+  const { inst } = await mountEditor(h)
+  const json = JSON.stringify(inst.tree)
+  assert.ok(json.includes('dfe-banner'), '应有官方代码块横幅')
+  assert.ok(json.includes('markdown'), '语言标签应来自 languageForPath')
+  const copyBtn = findNode(inst.tree, (n) => n.props && n.props['data-dfe-tool'] === 'copy')
+  assert.ok(copyBtn, '横幅应有复制按钮')
+  copyBtn.props.onClick()
+  await sleep(10)
+  assert.deepEqual(h.copied, ['one\n'], '复制按钮应复制当前编辑缓冲')
+  inst.unmount()
+})
+
+test('样式：采用官方 code font token、行号 counter 与 wrap 规则', async () => {
+  const h = makeHarness()
+  await h.exported.apply(h.ctx)
+  const style = h.document.head.children.find((node) => node.tagName === 'STYLE' && node.dataset.pluginCss === 'dsh-file-explorer:editor.css')
+  assert.ok(style, '未注入编辑页样式')
+  const css = style.textContent
+  assert.ok(css.includes('var(--dsw-font-markdown-code-block'), '必须使用官方代码字体 token')
+  assert.ok(css.includes('counter-increment:source-line'), '行号必须由 CSS counter 生成')
+  assert.ok(css.includes('overflow-wrap:anywhere'), '必须支持官方同款自动换行')
+  assert.ok(css.includes('padding:16px'), '必须使用官方 CodeBody 的 16px pre padding')
+  assert.ok(css.includes('font:inherit'), 'code 元素必须重置字体（UA code{font-family:monospace} 会压过继承）')
 })
 
 test('「编辑」按钮：用官方规则的同一文件地址 + kind=file-editor 打开（并带上绝对路径）', async () => {
@@ -437,7 +464,7 @@ test('「编辑」按钮：用官方规则的同一文件地址 + kind=file-edit
   assert.equal(options.params.absolutePath, ABS, '绝对路径要经 navigation.params 传给编辑页')
 })
 
-test('编辑页：读文件（带 tab.contentId 解析出的 sessionId）→ 渲染行号与输入区', async () => {
+test('编辑页：读文件（带 tab.contentId 解析出的 sessionId）→ 官方代码块结构', async () => {
   const h = makeHarness({ fileText: 'alpha\nbeta\ngamma\n' })
   await h.exported.apply(h.ctx)
   const { inst } = await mountEditor(h)
@@ -450,8 +477,23 @@ test('编辑页：读文件（带 tab.contentId 解析出的 sessionId）→ 渲
   assert.equal(read[3], SESSION, '读请求必须带 tab.contentId 里的 sessionId（不能猜最近会话）')
   const json = JSON.stringify(tree)
   assert.ok(json.includes('alpha'), '渲染结果里应有文件内容')
-  assert.ok(json.includes('dfe-gutter'), '应有行号 gutter')
+  assert.ok(json.includes('dfe-hl'), '应有官方样式的代码层')
+  assert.ok(json.includes('dfe-code-inner'), '行号应走官方 counter 结构')
   assert.ok(json.includes('dfe-input'), '应有输入区')
+  const lineNodes = []
+  const walk = (node) => {
+    if (node === null || typeof node !== 'object') return
+    const cls = node.props && node.props.className
+    if (typeof cls === 'string' && cls.split(' ').includes('dfe-line')) lineNodes.push(node)
+    for (const child of node.children || []) walk(child)
+  }
+  walk(tree)
+  assert.equal(lineNodes.length, 4, '三条内容行 + 末尾空行（textarea 末尾换行必须可编辑）')
+  assert.equal(lineNodes[3].props.className.includes('dfe-line-eof'), true, '末尾空行不显示行号')
+  const layer = findNode(tree, (n) => n.props && n.props.className === 'dfe-layer')
+  assert.equal(layer.props.style['--dfe-line-number-width'], '2ch', '行号宽度按官方 max(2,位数)ch 下发')
+  const input = findNode(tree, (n) => n.props && n.props.className === 'dfe-input')
+  assert.equal(input.props.wrap, 'soft', '默认自动换行')
   inst.unmount()
 })
 

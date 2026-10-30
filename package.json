@@ -1,6 +1,6 @@
 {
   "name": "dsh-file-explorer",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Editor add-on for the DSH web client's official read-only file preview: an Edit action in the preview header opens the same file address in an editor tab that writes back with optimistic-concurrency protection. Highlights with the official shared highlighter.",
   "type": "module",
   "main": "lib/index.js",

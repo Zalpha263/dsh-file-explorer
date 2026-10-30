@@ -5,7 +5,7 @@
 //   · 服务注册面（旧的文件操作接口必须消失）
 //   · 读：文本 + 版本令牌 + 截断标记；二进制与「非 UTF-8」都被识别且拒绝编辑
 //   · 写：正常写回、陈旧版本被拒、工作区边界、沙箱拒绝的错误映射
-// ctx.fs 用最小桩实现（resolve/stat/processPath/streamText/writeText），
+// ctx.fs 用最小桩实现（resolve/stat/streamText/writeText），
 // 足以驱动真实代码路径。
 //
 // 运行：node test/host.test.mjs
@@ -23,7 +23,7 @@ const TMP = path.join(here, '.tmp-host')
 
 /** 最小 ctx.fs 桩：契约与 dsh-fs 一致（target 对象带 displayPath）。 */
 function makeFsStub(state) {
-  const of = (target) => String(target && target.displayPath !== undefined ? target.displayPath : target)
+  const of = (target) => String(target)
   const versions = new Map()
   const bump = (file, size) => {
     const next = (versions.get(file) || 0) + 1
@@ -31,7 +31,7 @@ function makeFsStub(state) {
     return 'ver:' + next + ':' + size
   }
   return {
-    resolve: (p) => Promise.resolve({ displayPath: String(p) }),
+    resolve: (p) => Promise.resolve(String(p)),
     stat: async (target) => {
       const file = of(target)
       if (state.hideFile === file) return undefined
@@ -46,7 +46,6 @@ function makeFsStub(state) {
         return undefined
       }
     },
-    processPath: (target) => of(target),
     streamText: (target) => (async function* () {
       const file = of(target)
       if (state.notText === file) {
@@ -77,7 +76,7 @@ function makeFsStub(state) {
 }
 
 function bootHost(state = {}) {
-  const opts = Object.assign({ hideFile: null, notText: null, streamOverride: null, denyWrite: null, sessions: null, policyCalls: [] }, state)
+  const opts = Object.assign({ hideFile: null, notText: null, streamOverride: null, denyWrite: null, sessions: null, agents: null, policyCalls: [] }, state)
   const ctx = new Context()
   /* 会话策略桩：带 session 时返回该会话的 cwd 作为根（真实 dsh-sandbox-policy
      就是这样把 session.header.cwd 当 workspace-write 边界的）。 */
@@ -100,6 +99,7 @@ function bootHost(state = {}) {
       return map[id]
     }
   })
+  if (opts.agents !== null) ctx.provide('agents', opts.agents)
   ctx.provide('fs', makeFsStub(opts))
   apply(ctx)
   const svc = ctx.get('fileExplorer')
@@ -137,6 +137,7 @@ test('读：返回文本、版本令牌、文本性判定', async () => {
   assert.equal(res.decodeValid, true)
   assert.equal(res.binary, undefined)
   assert.equal(res.size > 0, true)
+  assert.equal('path' in res, false, '响应不应再带未使用的 path 字段')
 })
 
 test('读：截断标记与 UTF-8 安全切片（截断点落在代理对中间也不劈开 emoji）', async () => {
@@ -183,6 +184,7 @@ test('写：正常写回并返回新版本；陈旧版本被拒绝', async () =>
   assert.ok(typeof wrote.version === 'string')
   assert.notEqual(wrote.version, read.version, '写入后版本必须变化')
   assert.equal(await fs.readFile(file, 'utf8'), '# 改过了\n')
+  assert.deepEqual(Object.keys(wrote), ['version'], '写回只返回版本令牌')
   await assert.rejects(() => svc.fsWrite(file, '# 再改\n', read.version), /stale/)
   assert.equal(await fs.readFile(file, 'utf8'), '# 改过了\n', '陈旧写入不得落盘')
 })
@@ -220,6 +222,7 @@ test('stat：返回版本与大小，供编辑页轮询外部改动', async () =
   const before = await svc.fsStat(file)
   assert.equal(before.type, 'file')
   assert.ok(before.size > 0)
+  assert.equal('path' in before, false, 'stat 响应不应再带未使用的 path 字段')
   const read = await svc.fsRead(file)
   const after = await svc.fsStat(file)
   assert.equal(after.version, read.version, 'stat 与 read 必须给出同一族的版本令牌（陈旧守卫依赖它）')
@@ -273,6 +276,24 @@ test('会话：带 sessionId 时读/写/策略都取该会话的 cwd（两个不
   } finally {
     await fs.rm(dirA, { recursive: true, force: true })
     await fs.rm(dirB, { recursive: true, force: true })
+  }
+})
+
+test('旧调用：无 sessionId 时用 agents.roots() 的最近根会话解析路径与写根', async () => {
+  const dir = path.join(here, '.tmp-legacy')
+  await fs.rm(dir, { recursive: true, force: true })
+  await fs.mkdir(dir, { recursive: true })
+  await fs.writeFile(path.join(dir, 'a.md'), 'legacy\n', 'utf8')
+  const session = makeSession('live', dir)
+  try {
+    const { svc, state } = bootHost({ agents: { roots: () => [{ session }] } })
+    assert.equal((await svc.fsRead('a.md')).text, 'legacy\n', '相对路径应落到最近根会话的 cwd')
+    const wrote = await svc.fsWrite(path.join(dir, 'a.md'), 'legacy2\n', '')
+    assert.ok(typeof wrote.version === 'string')
+    assert.equal(await fs.readFile(path.join(dir, 'a.md'), 'utf8'), 'legacy2\n')
+    assert.ok(state.policyCalls.some((request) => request && request.session && request.session.id === 'live'), '沙箱策略应收到最近根会话')
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true })
   }
 })
 
