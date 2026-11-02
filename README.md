@@ -1,5 +1,6 @@
 # dsh-file-explorer
 [![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/Zalpha263/badge.svg)](https://hub.xerj.org/contributors/Zalpha263)
+
 DSH Web 界面里的**文件编辑器**（v2.1.0 起）：只给官方只读的文件预览补上"编辑"这一件事，不重复官方已有的浏览、预览、标签与主题能力。官方文件浏览与文档预览负责"看"，且预览是只读的（@deepseek-ai/dsh-api-workspace-files 原文："The service exposes no mutation operation."）；本插件在官方预览头部注入「编辑」按钮，用独立标签打开同一文件（会话作用域地址 + kind=file-editor，不抢默认打开），保存带版本校验。
 
 ## 能做什么
