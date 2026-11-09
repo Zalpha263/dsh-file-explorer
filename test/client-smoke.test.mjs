@@ -211,6 +211,7 @@ const PRIMITIVES_STUB = {
 
 /* ---------------- 宿主桩 ---------------- */
 const ABS = 'D:\\DeepseekPlugin\\notes\\a.md'
+const FOLDER = 'D:\\DeepseekPlugin\\notes'
 const SESSION = 'sess-1'
 /* 客户端拿不到会话 cwd，所以生成的是"会话作用域 + 绝对路径"地址；盘符的 `:`
    按官方规则保留字面量（不是 %3A）。 */
@@ -284,6 +285,11 @@ function makeHarness(opts = {}) {
       calls.push(['fsDelete', p, expectedVersion, sessionId])
       if (opts.fail && opts.fail.fsDelete) return failOf('fsDelete')
       return ok({ path: p, name: String(p).split(/[\\/]/).filter(Boolean).pop() || 'a.md' })
+    },
+    fsDeleteFolder: (p, sessionId) => {
+      calls.push(['fsDeleteFolder', p, sessionId])
+      if (opts.fail && opts.fail.fsDeleteFolder) return failOf('fsDeleteFolder')
+      return ok({ path: p, name: String(p).split(/[\\/]/).filter(Boolean).pop() || 'notes' })
     }
   }
   const tabs = { register: (def) => { registered.push({ def, comp: null }); return () => {} } }
@@ -383,14 +389,14 @@ test('bundle 注册与导出', () => {
   assert.equal(typeof exported.__test, 'object', '纯函数测试出口必须存在')
 })
 
-test('remote 贡献：编辑三方法 + 文件管理六方法，sessionId 可选尾参', async () => {
+test('remote 贡献：编辑三方法 + 文件管理七方法，sessionId 可选尾参', async () => {
   const h = makeHarness()
   await h.exported.apply(h.ctx)
   assert.equal(h.mounted.length, 1)
   const descriptors = h.mounted[0].descriptors
   assert.deepEqual(descriptors.map((d) => d.method), [
     'fsStat', 'fsRead', 'fsWrite',
-    'fsEnvironment', 'fsDescribe', 'fsCreateFile', 'fsCreateFolder', 'fsRename', 'fsDelete'
+    'fsEnvironment', 'fsDescribe', 'fsCreateFile', 'fsCreateFolder', 'fsRename', 'fsDelete', 'fsDeleteFolder'
   ])
   const params = Object.fromEntries(descriptors.map((d) => [d.method, d.parameters.map((p) => p.name)]))
   assert.deepEqual(params.fsStat, ['path', 'sessionId'])
@@ -402,6 +408,7 @@ test('remote 贡献：编辑三方法 + 文件管理六方法，sessionId 可选
   assert.deepEqual(params.fsCreateFolder, ['directory', 'name', 'sessionId'])
   assert.deepEqual(params.fsRename, ['path', 'newName', 'sessionId'])
   assert.deepEqual(params.fsDelete, ['path', 'expectedVersion', 'sessionId'])
+  assert.deepEqual(params.fsDeleteFolder, ['path', 'sessionId'])
   for (const d of descriptors) {
     const optional = d.parameters.find((p) => p.name === 'sessionId')
     assert.equal(optional.acceptsUndefined, true, d.method + ' 的 sessionId 必须声明 acceptsUndefined（旧调用不传时要通过网关注解）')
@@ -728,7 +735,8 @@ test('右键菜单：目录/文件 provider、动作与复制相对路径', asyn
   assert.equal(file.target, 'file')
   assert.equal(directory.order, 50)
   const dirActions = directory.resolve({ sessionId: SESSION, path: 'D:\\DeepseekPlugin\\notes' })
-  assert.deepEqual(dirActions.map((a) => a.id), ['createFile', 'createFolder', 'rename', 'copyRelative'])
+  assert.deepEqual(dirActions.map((a) => a.id), ['createFile', 'createFolder', 'rename', 'deleteFolder', 'copyRelative'])
+  assert.equal(dirActions.find((a) => a.id === 'deleteFolder').danger, true)
   const fileActions = file.resolve({ sessionId: SESSION, path: ABS })
   assert.deepEqual(fileActions.map((a) => a.id), ['rename', 'delete', 'copyRelative'])
   assert.equal(fileActions.find((a) => a.id === 'delete').danger, true)
@@ -794,6 +802,32 @@ test('对话框：删除提交带版本号，成功后发出 deleted 事件', as
   assert.deepEqual(call, ['fsDelete', ABS, 'v1', SESSION], '删除必须带 fsDescribe 拿到的版本号')
   assert.ok(h.notices.some((n) => n[0].includes('已删除') && n[1] === true))
   assert.equal(h.exported.__test.getFileOpsDialog(), null)
+  unsubscribe()
+  inst.unmount()
+})
+
+test('对话框：删除文件夹提交 fsDeleteFolder，提示递归并发出 deleted 事件', async () => {
+  const h = makeHarness({ describe: { kind: 'directory', size: null, version: null } })
+  await h.exported.apply(h.ctx)
+  const A = h.exported.__test
+  const events = []
+  const unsubscribe = A.subscribeFileEvents((event) => events.push(event))
+  const Dialog = A.DeleteDialog
+  const dialog = { kind: 'delete-folder', sessionId: SESSION, path: FOLDER }
+  const inst = h.hooks.mount(Dialog, { dialog })
+  inst.render()
+  await sleep(30)
+  inst.render()
+  const json = JSON.stringify(inst.tree)
+  assert.ok(json.includes('删除文件夹'), '标题应为删除文件夹')
+  assert.ok(json.includes('递归删除'), '应提示递归删除')
+  const confirm = findNode(inst.tree, (n) => n.type === 'button' && n.children.join('') === '永久删除')
+  assert.ok(confirm, '应有永久删除按钮')
+  confirm.props.onClick()
+  await sleep(40)
+  assert.deepEqual(h.calls.find((c) => c[0] === 'fsDeleteFolder'), ['fsDeleteFolder', FOLDER, SESSION])
+  assert.ok(h.notices.some((n) => n[0].includes('已删除文件夹') && n[1] === true), '应提示已删除文件夹')
+  assert.deepEqual(events, [{ kind: 'deleted', path: FOLDER }])
   unsubscribe()
   inst.unmount()
 })

@@ -1,6 +1,6 @@
 {
   "name": "dsh-file-explorer",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "File management and editor add-on for the DSH web client's official right-sidebar Files page: create/rename/delete files and folders, copy workspace-relative paths, drag files into the composer as @path references, and edit text with optimistic-concurrency protection using the official shared highlighter.",
   "type": "module",
   "main": "lib/index.js",

@@ -155,12 +155,12 @@ async function seed() {
   await fs.writeFile(path.join(TMP, 'a.md'), '# 标题\n第二行\n', 'utf8')
 }
 
-test('启动：编辑三方法 + 文件管理六方法，旧批量接口消失', async () => {
+test('启动：编辑三方法 + 文件管理七方法，旧批量接口消失', async () => {
   await seed()
   const { svc } = bootHost()
   for (const method of [
     'fsStat', 'fsRead', 'fsWrite',
-    'fsEnvironment', 'fsDescribe', 'fsCreateFile', 'fsCreateFolder', 'fsRename', 'fsDelete'
+    'fsEnvironment', 'fsDescribe', 'fsCreateFile', 'fsCreateFolder', 'fsRename', 'fsDelete', 'fsDeleteFolder'
   ]) {
     assert.equal(typeof svc[method], 'function', method + ' 应已注册')
   }
@@ -451,6 +451,38 @@ test('delete：版本守卫、目录与越界拒绝、符号链接只删链接',
     await fs.rm(target, { force: true })
   }
   await assert.rejects(() => h.svc.fsDelete(path.join(here, 'outside.txt'), '', 's1'), /工作区|文件已不存在/)
+})
+
+test('deleteFolder：递归删除、根/文件/越界拒绝、符号链接只删链接', async () => {
+  await seed()
+  const h = bootHost({ sessions: new Map([['s1', makeSession('s1', TMP)]]) })
+  const folder = path.join(TMP, 'del-folder')
+  await fs.mkdir(path.join(folder, 'nested'), { recursive: true })
+  await fs.writeFile(path.join(folder, 'a.txt'), 'a', 'utf8')
+  await fs.writeFile(path.join(folder, 'nested', 'b.txt'), 'b', 'utf8')
+  const res = await h.svc.fsDeleteFolder(folder, 's1')
+  assert.equal(res.name, 'del-folder')
+  await assert.rejects(() => fs.stat(folder))
+
+  const file = path.join(TMP, 'not-folder.txt')
+  await fs.writeFile(file, 'x', 'utf8')
+  await assert.rejects(() => h.svc.fsDeleteFolder(file, 's1'), /只支持删除文件夹/)
+  await assert.rejects(() => h.svc.fsDeleteFolder(TMP, 's1'), /当前工作目录/)
+  await assert.rejects(() => h.svc.fsDeleteFolder(path.join(here, 'outside-folder'), 's1'), /工作区|已不存在/)
+
+  const targetDir = path.join(here, '.tmp-dir-link-target')
+  const link = path.join(TMP, 'dir-link')
+  await fs.mkdir(targetDir, { recursive: true })
+  try {
+    await fs.symlink(targetDir, link, 'junction')
+    await h.svc.fsDeleteFolder(link, 's1')
+    await assert.rejects(() => fs.stat(link))
+    assert.equal((await fs.stat(targetDir)).isDirectory(), true)
+  } catch (err) {
+    if (!err || (err.code !== 'EPERM' && err.code !== 'EACCES')) throw err
+  } finally {
+    await fs.rm(targetDir, { recursive: true, force: true })
+  }
 })
 
 test('会话：新方法按 sessionId 取各自 cwd，未知会话显式报错', async () => {
