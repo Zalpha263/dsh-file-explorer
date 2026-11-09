@@ -25,6 +25,7 @@ const TMP = path.join(here, '.tmp-host')
 function makeFsStub(state) {
   const of = (target) => String(target)
   const versions = new Map()
+  const currentVersion = (file, size) => 'ver:' + (versions.get(file) || 0) + ':' + size
   const bump = (file, size) => {
     const next = (versions.get(file) || 0) + 1
     versions.set(file, next)
@@ -32,6 +33,8 @@ function makeFsStub(state) {
   }
   return {
     resolve: (p) => Promise.resolve(String(p)),
+    /* 本地后端标记：目录操作会直接落到真实临时目录。 */
+    processPathFromHostPath: (p) => path.isAbsolute(String(p)) ? String(p) : undefined,
     stat: async (target) => {
       const file = of(target)
       if (state.hideFile === file) return undefined
@@ -40,11 +43,41 @@ function makeFsStub(state) {
         return {
           type: st.isDirectory() ? 'directory' : 'file',
           size: st.size,
-          version: 'ver:' + (versions.get(file) || 0) + ':' + st.size
+          version: currentVersion(file, st.size)
         }
       } catch (err) {
         return undefined
       }
+    },
+    lstat: async (p) => {
+      try {
+        const st = await fs.lstat(String(p))
+        return {
+          type: st.isSymbolicLink() ? 'symlink' : st.isDirectory() ? 'directory' : st.isFile() ? 'file' : 'other',
+          size: st.size,
+          version: currentVersion(String(p), st.size)
+        }
+      } catch (err) {
+        return undefined
+      }
+    },
+    deleteFile: async (target, expected) => {
+      const file = of(target)
+      const st = await fs.stat(file).catch(() => null)
+      if (st === null) {
+        const err = new Error('gone')
+        err.code = 'FS_NOT_FOUND'
+        throw err
+      }
+      if (expected && typeof expected.version === 'string' && expected.version !== '') {
+        if (currentVersion(file, st.size) !== expected.version) {
+          const err = new Error('stale')
+          err.code = 'FS_STALE_VERSION'
+          throw err
+        }
+      }
+      await fs.unlink(file)
+      return { before: null }
     },
     streamText: (target) => (async function* () {
       const file = of(target)
@@ -63,9 +96,14 @@ function makeFsStub(state) {
         throw err
       }
       const exists = await fs.stat(file).then(() => true).catch(() => false)
+      if (intent && intent.kind === 'createIfAbsent' && exists) {
+        const err = new Error('exists')
+        err.code = 'FS_NOT_OBSERVED'
+        throw err
+      }
       if (intent && intent.kind === 'replaceIfVersion') {
         if (!exists) { const err = new Error('gone'); err.code = 'FS_NOT_FOUND'; throw err }
-        const current = 'ver:' + (versions.get(file) || 0) + ':' + (await fs.stat(file)).size
+        const current = currentVersion(file, (await fs.stat(file)).size)
         if (current !== intent.version) { const err = new Error('stale'); err.code = 'FS_STALE_VERSION'; throw err }
       }
       await fs.writeFile(file, content, 'utf8')
@@ -117,13 +155,16 @@ async function seed() {
   await fs.writeFile(path.join(TMP, 'a.md'), '# 标题\n第二行\n', 'utf8')
 }
 
-test('启动：只暴露三个方法，旧的文件操作接口全部消失', async () => {
+test('启动：编辑三方法 + 文件管理六方法，旧批量接口消失', async () => {
   await seed()
   const { svc } = bootHost()
-  assert.equal(typeof svc.fsStat, 'function')
-  assert.equal(typeof svc.fsRead, 'function')
-  assert.equal(typeof svc.fsWrite, 'function')
-  for (const gone of ['fsList', 'fsRender', 'fsCreate', 'fsRename', 'fsCopy', 'fsDelete', 'fsMove', 'wsRoot', 'wsList', 'fsRestore', 'fsSearchName', 'fsGrep', 'fsBatch']) {
+  for (const method of [
+    'fsStat', 'fsRead', 'fsWrite',
+    'fsEnvironment', 'fsDescribe', 'fsCreateFile', 'fsCreateFolder', 'fsRename', 'fsDelete'
+  ]) {
+    assert.equal(typeof svc[method], 'function', method + ' 应已注册')
+  }
+  for (const gone of ['fsList', 'fsRender', 'fsCopy', 'fsMove', 'wsRoot', 'wsList', 'fsRestore', 'fsSearchName', 'fsGrep', 'fsBatch']) {
     assert.equal(svc[gone], undefined, gone + ' 应已删除')
   }
 })
@@ -294,6 +335,146 @@ test('旧调用：无 sessionId 时用 agents.roots() 的最近根会话解析�
     assert.ok(state.policyCalls.some((request) => request && request.session && request.session.id === 'live'), '沙箱策略应收到最近根会话')
   } finally {
     await fs.rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('environment：平台、分隔符、本地后端与会话根', async () => {
+  const h = bootHost({ sessions: new Map([['s1', makeSession('s1', TMP)]]) })
+  const env = await h.svc.fsEnvironment('s1')
+  assert.equal(env.platform, process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux')
+  assert.equal(env.separator, process.platform === 'win32' ? '\\' : '/')
+  assert.equal(env.caseSensitive, process.platform === 'linux')
+  assert.equal(env.localBackend, true)
+  assert.equal(env.cwd, TMP)
+  assert.equal(env.workspaceRoot, TMP)
+  await assert.rejects(() => h.svc.fsEnvironment('nope'), /session not found/)
+})
+
+test('describe：native / relative / 类型 / 版本；missing 与越界都不抛', async () => {
+  await seed()
+  const h = bootHost({ sessions: new Map([['s1', makeSession('s1', TMP)]]) })
+  const file = path.join(TMP, 'a.md')
+  const info = await h.svc.fsDescribe(file, 's1')
+  assert.equal(info.name, 'a.md')
+  assert.equal(info.directory, TMP)
+  assert.equal(info.relative, 'a.md')
+  assert.equal(info.kind, 'file')
+  assert.equal(info.exists, true)
+  assert.equal(info.link, false)
+  assert.equal(info.insideWorkspace, true)
+  assert.ok(typeof info.version === 'string' && info.version !== '')
+  assert.equal(info.native, path.normalize(file))
+
+  const missing = await h.svc.fsDescribe(path.join(TMP, 'nope.txt'), 's1')
+  assert.equal(missing.exists, false)
+  assert.equal(missing.kind, null)
+  assert.equal(missing.relative, 'nope.txt')
+  assert.equal(missing.insideWorkspace, true)
+
+  const outside = await h.svc.fsDescribe(path.join(here, 'outside.txt'), 's1')
+  assert.equal(outside.insideWorkspace, false)
+  assert.equal(outside.relative, null)
+})
+
+test('createFile：createIfAbsent 成功、同名/非法名/越界拒绝', async () => {
+  await seed()
+  const h = bootHost({ sessions: new Map([['s1', makeSession('s1', TMP)]]) })
+  const created = await h.svc.fsCreateFile(TMP, '新建 文件.md', 's1')
+  assert.equal(created.name, '新建 文件.md')
+  assert.equal(await fs.readFile(path.join(TMP, '新建 文件.md'), 'utf8'), '')
+  assert.ok(typeof created.version === 'string')
+  await assert.rejects(() => h.svc.fsCreateFile(TMP, '新建 文件.md', 's1'), /同名文件\/文件夹已存在/)
+  await assert.rejects(() => h.svc.fsCreateFile(TMP, 'a/b.txt', 's1'), /路径分隔符/)
+  await assert.rejects(() => h.svc.fsCreateFile(TMP, '..', 's1'), /不能是/)
+  const outside = path.join(here, '.tmp-outside')
+  await fs.rm(outside, { recursive: true, force: true })
+  await fs.mkdir(outside, { recursive: true })
+  try {
+    await assert.rejects(() => h.svc.fsCreateFile(outside, 'x.txt', 's1'), /父目录|工作区/)
+  } finally {
+    await fs.rm(outside, { recursive: true, force: true })
+  }
+})
+
+test('createFolder / rename：本地后端真实落盘，重复与越界拒绝', async () => {
+  await seed()
+  const h = bootHost({ sessions: new Map([['s1', makeSession('s1', TMP)]]) })
+  await h.svc.fsCreateFolder(TMP, '子目录', 's1')
+  const st = await fs.stat(path.join(TMP, '子目录'))
+  assert.equal(st.isDirectory(), true)
+  await assert.rejects(() => h.svc.fsCreateFolder(TMP, '子目录', 's1'), /同名文件\/文件夹已存在/)
+
+  await fs.writeFile(path.join(TMP, 'r.md'), 'x', 'utf8')
+  const renamed = await h.svc.fsRename(path.join(TMP, 'r.md'), 'R.md', 's1')
+  assert.equal(renamed.name, 'R.md')
+  assert.equal(await fs.readFile(path.join(TMP, 'R.md'), 'utf8'), 'x')
+  assert.ok((await fs.readdir(TMP)).includes('R.md'), '目录项应使用新名字')
+
+  await fs.writeFile(path.join(TMP, 'b.md'), 'b', 'utf8')
+  await assert.rejects(() => h.svc.fsRename(path.join(TMP, 'R.md'), 'b.md', 's1'), /同名文件\/文件夹已存在/)
+  await assert.rejects(() => h.svc.fsRename(TMP, 'x', 's1'), /当前工作目录/)
+
+  await h.svc.fsCreateFolder(TMP, 'folder-a', 's1')
+  await h.svc.fsRename(path.join(TMP, 'folder-a'), 'folder-b', 's1')
+  assert.equal((await fs.stat(path.join(TMP, 'folder-b'))).isDirectory(), true)
+})
+
+test('delete：版本守卫、目录与越界拒绝、符号链接只删链接', async () => {
+  await seed()
+  const h = bootHost({ sessions: new Map([['s1', makeSession('s1', TMP)]]) })
+  const file = path.join(TMP, 'del.txt')
+  await fs.writeFile(file, 'x', 'utf8')
+  const info = await h.svc.fsDescribe(file, 's1')
+  await h.svc.fsDelete(file, info.version, 's1')
+  await assert.rejects(() => fs.stat(file))
+
+  await fs.writeFile(file, 'y', 'utf8')
+  const stale = await h.svc.fsDescribe(file, 's1')
+  await fs.writeFile(file, 'zz', 'utf8')
+  await assert.rejects(() => h.svc.fsDelete(file, stale.version, 's1'), /外部修改/)
+  assert.equal(await fs.readFile(file, 'utf8'), 'zz')
+
+  await h.svc.fsCreateFolder(TMP, 'del-dir', 's1')
+  await assert.rejects(() => h.svc.fsDelete(path.join(TMP, 'del-dir'), '', 's1'), /只支持删除文件/)
+
+  const target = path.join(here, '.tmp-link-target.txt')
+  const link = path.join(TMP, 'link.txt')
+  await fs.writeFile(target, 'target', 'utf8')
+  try {
+    await fs.symlink(target, link, 'file')
+    await h.svc.fsDelete(link, '', 's1')
+    await assert.rejects(() => fs.stat(link))
+    assert.equal(await fs.readFile(target, 'utf8'), 'target')
+  } catch (err) {
+    if (!err || (err.code !== 'EPERM' && err.code !== 'EACCES')) throw err
+  } finally {
+    await fs.rm(target, { force: true })
+  }
+  await assert.rejects(() => h.svc.fsDelete(path.join(here, 'outside.txt'), '', 's1'), /工作区|文件已不存在/)
+})
+
+test('会话：新方法按 sessionId 取各自 cwd，未知会话显式报错', async () => {
+  const dirA = path.join(here, '.tmp-mut-a')
+  const dirB = path.join(here, '.tmp-mut-b')
+  await fs.rm(dirA, { recursive: true, force: true })
+  await fs.rm(dirB, { recursive: true, force: true })
+  await fs.mkdir(dirA, { recursive: true })
+  await fs.mkdir(dirB, { recursive: true })
+  try {
+    const sessions = new Map([
+      ['sess-a', makeSession('sess-a', dirA)],
+      ['sess-b', makeSession('sess-b', dirB)]
+    ])
+    const h = bootHost({ sessions })
+    await h.svc.fsCreateFile(dirA, 'a.txt', 'sess-a')
+    await h.svc.fsCreateFile(dirB, 'b.txt', 'sess-b')
+    assert.equal((await h.svc.fsDescribe(path.join(dirA, 'a.txt'), 'sess-a')).relative, 'a.txt')
+    assert.equal((await h.svc.fsDescribe(path.join(dirB, 'b.txt'), 'sess-b')).relative, 'b.txt')
+    await assert.rejects(() => h.svc.fsCreateFile(dirB, 'x.txt', 'sess-a'), /工作区/)
+    await assert.rejects(() => h.svc.fsCreateFile(dirA, 'x.txt', 'nope'), /session not found/)
+  } finally {
+    await fs.rm(dirA, { recursive: true, force: true })
+    await fs.rm(dirB, { recursive: true, force: true })
   }
 })
 

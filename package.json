@@ -1,7 +1,7 @@
 {
   "name": "dsh-file-explorer",
-  "version": "2.1.0",
-  "description": "Editor add-on for the DSH web client's official read-only file preview: an Edit action in the preview header opens the same file address in an editor tab that writes back with optimistic-concurrency protection. Highlights with the official shared highlighter.",
+  "version": "2.3.0",
+  "description": "File management and editor add-on for the DSH web client's official right-sidebar Files page: create/rename/delete files and folders, copy workspace-relative paths, drag files into the composer as @path references, and edit text with optimistic-concurrency protection using the official shared highlighter.",
   "type": "module",
   "main": "lib/index.js",
   "icon": "./icon.svg",
@@ -33,6 +33,8 @@
     "deepseek-harness",
     "web-ui",
     "editor",
+    "file-manager",
+    "drag-drop",
     "plugin"
   ],
   "license": "MIT",
@@ -46,6 +48,6 @@
     "cordis.patch.yml"
   ],
   "scripts": {
-    "test": "node test/host.test.mjs && node test/client-smoke.test.mjs"
+    "test": "node test/paths.test.mjs && node test/host.test.mjs && node test/client-smoke.test.mjs"
   }
 }

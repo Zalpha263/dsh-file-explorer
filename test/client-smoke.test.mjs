@@ -62,6 +62,15 @@ function makeDocument() {
   doc.createElement = (tag) => makeEl(tag)
   doc.createTextNode = (t) => { const el = makeEl('#text'); el.textContent = t; return el }
   doc.querySelector = (sel) => { for (const t of [doc.head, doc.body]) { const hit = t.querySelector(sel); if (hit) return hit } return null }
+  doc._listeners = {}
+  doc.addEventListener = (name, fn) => { (doc._listeners[name] = doc._listeners[name] || []).push(fn) }
+  doc.removeEventListener = (name, fn) => {
+    const list = doc._listeners[name]
+    if (!Array.isArray(list)) return
+    const i = list.indexOf(fn)
+    if (i >= 0) list.splice(i, 1)
+  }
+  doc.dispatch = (name, event) => { for (const fn of (doc._listeners[name] || []).slice()) fn(event) }
   return doc
 }
 
@@ -188,9 +197,16 @@ function loadBundle(primitives) {
 }
 
 /** 官方高亮件的替身：语言表与 useCodeHighlighter 都要在（验证我们真用了官方接口）。 */
+const Icon = (props) => ({ type: 'svg', props: props || {}, children: [] })
 const PRIMITIVES_STUB = {
   languageForPath: (p) => (/\.(md|markdown)$/i.test(p) ? 'markdown' : /\.(js|mjs|cjs)$/i.test(p) ? 'javascript' : undefined),
-  useCodeHighlighter: () => (code) => String(code).split('\n').map((line) => [{ text: line, style: { color: '#abc' } }])
+  useCodeHighlighter: () => (code) => String(code).split('\n').map((line) => [{ text: line, style: { color: '#abc' } }]),
+  IconPlusOutlineRegular: Icon,
+  IconEditOutlineRegular: Icon,
+  IconTrashOutlineRegular: Icon,
+  IconEllipsisOutlineRegular: Icon,
+  IconCopyOutlineRegular: Icon,
+  Modal: (props) => ({ type: 'modal', props: props || {}, children: [] })
 }
 
 /* ---------------- 宿主桩 ---------------- */
@@ -209,6 +225,24 @@ function makeHarness(opts = {}) {
   const mounted = []
   const deferredSlots = new Map()
   const ok = (value) => Promise.resolve({ ok: true, value })
+  const CWD = 'D:\\DeepseekPlugin\\notes'
+  const failOf = (method) => {
+    const message = opts.fail && opts.fail[method]
+    return message === undefined ? null : Promise.resolve({ ok: false, error: { message } })
+  }
+  const describeOf = (p, overrides) => Object.assign({
+    absolute: p,
+    native: p,
+    relative: 'a.md',
+    name: String(p).split(/[\\/]/).filter(Boolean).pop() || 'a.md',
+    directory: CWD,
+    kind: 'file',
+    exists: true,
+    link: false,
+    insideWorkspace: true,
+    version: 'v1',
+    size: 42
+  }, overrides || {})
   const namespace = {
     fsStat: (p, sessionId) => { calls.push(['fsStat', p, sessionId]); return ok({ path: p, type: 'file', size: 42, version: opts.statVersion || 'v1' }) },
     fsRead: (p, maxBytes, sessionId) => {
@@ -216,7 +250,41 @@ function makeHarness(opts = {}) {
       if (opts.readFails) return Promise.resolve({ ok: false, error: { message: 'read failed' } })
       return ok({ path: p, size: 42, version: 'v1', truncated: false, decodeValid: true, text: opts.fileText || 'line one\nline two\n' })
     },
-    fsWrite: (p, content, version, sessionId) => { calls.push(['fsWrite', p, content, version, sessionId]); return ok({ path: p, version: 'v2', size: content.length }) }
+    fsWrite: (p, content, version, sessionId) => { calls.push(['fsWrite', p, content, version, sessionId]); return ok({ path: p, version: 'v2', size: content.length }) },
+    fsEnvironment: (sessionId) => {
+      calls.push(['fsEnvironment', sessionId])
+      if (opts.fail && opts.fail.fsEnvironment) return failOf('fsEnvironment')
+      return ok(Object.assign({
+        platform: 'win32', separator: '\\', caseSensitive: false, localBackend: true,
+        cwd: CWD, workspaceRoot: CWD
+      }, opts.env || {}))
+    },
+    fsDescribe: (p, sessionId) => {
+      calls.push(['fsDescribe', p, sessionId])
+      if (opts.fail && opts.fail.fsDescribe) return failOf('fsDescribe')
+      return ok(describeOf(p, opts.describe))
+    },
+    fsCreateFile: (directory, name, sessionId) => {
+      calls.push(['fsCreateFile', directory, name, sessionId])
+      if (opts.fail && opts.fail.fsCreateFile) return failOf('fsCreateFile')
+      return ok({ path: directory + '\\' + name, name, version: 'v-created' })
+    },
+    fsCreateFolder: (directory, name, sessionId) => {
+      calls.push(['fsCreateFolder', directory, name, sessionId])
+      if (opts.fail && opts.fail.fsCreateFolder) return failOf('fsCreateFolder')
+      return ok({ path: directory + '\\' + name, name })
+    },
+    fsRename: (p, newName, sessionId) => {
+      calls.push(['fsRename', p, newName, sessionId])
+      if (opts.fail && opts.fail.fsRename) return failOf('fsRename')
+      const directory = String(p).slice(0, String(p).lastIndexOf('\\'))
+      return ok({ path: directory + '\\' + newName, name: newName, previousPath: p })
+    },
+    fsDelete: (p, expectedVersion, sessionId) => {
+      calls.push(['fsDelete', p, expectedVersion, sessionId])
+      if (opts.fail && opts.fail.fsDelete) return failOf('fsDelete')
+      return ok({ path: p, name: String(p).split(/[\\/]/).filter(Boolean).pop() || 'a.md' })
+    }
   }
   const tabs = { register: (def) => { registered.push({ def, comp: null }); return () => {} } }
   let tabsService = opts.lateTabs ? null : tabs
@@ -236,12 +304,27 @@ function makeHarness(opts = {}) {
     register: (def, comp) => { registered.push({ def, comp }); return () => {} }
   }
   const sidebarRight = { openResource: (address, options) => { opened.push([address, options]) } }
+  const menuProviders = []
+  const notices = []
+  const menuOpens = []
+  const contextMenus = {
+    register: (provider) => {
+      menuProviders.push(provider)
+      return () => {
+        const i = menuProviders.indexOf(provider)
+        if (i >= 0) menuProviders.splice(i, 1)
+      }
+    },
+    notify: (text, success) => { notices.push([text, success]) },
+    open: (target, point) => { menuOpens.push([target, point]) }
+  }
   const ctx = {
     effect: (fn) => { const d = fn(); return () => { if (typeof d === 'function') d() } },
     get: (k) => {
       if (k === 'slots') return slots
       if (k === 'sidebarRightTabs') return tabsService
       if (k === 'sidebarRight') return sidebarRight
+      if (k === 'contextMenus') return contextMenus
       if (k === 'remote.fileExplorer') return namespace
       return undefined
     },
@@ -251,10 +334,12 @@ function makeHarness(opts = {}) {
        用的就是 ctx.slots.* 这种属性写法，所以桩也要给属性，否则测不出真实调用面。 */
     slots: slots,
     sidebarRightTabs: tabs,
-    sidebarRight: sidebarRight
+    sidebarRight: sidebarRight,
+    contextMenus: contextMenus
   }
   return {
     exported, ctx, document, hooks, intervals, copied, registered, opened, calls, mounted,
+    menuProviders, notices, menuOpens, contextMenus,
     /** 让"晚到的槽位"出现（模拟 dsh-client-ui-sidebar-right 的 declaration）。 */
     declareSlot: (name) => {
       const cb = deferredSlots.get(name)
@@ -298,21 +383,30 @@ test('bundle 注册与导出', () => {
   assert.equal(typeof exported.__test, 'object', '纯函数测试出口必须存在')
 })
 
-test('remote 贡献只剩三个方法，且都声明可选尾参 sessionId', async () => {
+test('remote 贡献：编辑三方法 + 文件管理六方法，sessionId 可选尾参', async () => {
   const h = makeHarness()
   await h.exported.apply(h.ctx)
   assert.equal(h.mounted.length, 1)
   const descriptors = h.mounted[0].descriptors
-  assert.deepEqual(descriptors.map((d) => d.method), ['fsStat', 'fsRead', 'fsWrite'])
+  assert.deepEqual(descriptors.map((d) => d.method), [
+    'fsStat', 'fsRead', 'fsWrite',
+    'fsEnvironment', 'fsDescribe', 'fsCreateFile', 'fsCreateFolder', 'fsRename', 'fsDelete'
+  ])
   const params = Object.fromEntries(descriptors.map((d) => [d.method, d.parameters.map((p) => p.name)]))
   assert.deepEqual(params.fsStat, ['path', 'sessionId'])
   assert.deepEqual(params.fsRead, ['path', 'maxBytes', 'sessionId'])
   assert.deepEqual(params.fsWrite, ['path', 'content', 'expectedVersion', 'sessionId'])
+  assert.deepEqual(params.fsEnvironment, ['sessionId'])
+  assert.deepEqual(params.fsDescribe, ['path', 'sessionId'])
+  assert.deepEqual(params.fsCreateFile, ['directory', 'name', 'sessionId'])
+  assert.deepEqual(params.fsCreateFolder, ['directory', 'name', 'sessionId'])
+  assert.deepEqual(params.fsRename, ['path', 'newName', 'sessionId'])
+  assert.deepEqual(params.fsDelete, ['path', 'expectedVersion', 'sessionId'])
   for (const d of descriptors) {
     const optional = d.parameters.find((p) => p.name === 'sessionId')
     assert.equal(optional.acceptsUndefined, true, d.method + ' 的 sessionId 必须声明 acceptsUndefined（旧调用不传时要通过网关注解）')
   }
-  for (const gone of ['fsList', 'fsRender', 'fsCreate', 'fsRename', 'fsCopy', 'fsDelete', 'fsMove', 'wsRoot', 'wsList']) {
+  for (const gone of ['fsList', 'fsRender', 'fsCreate', 'fsCopy', 'fsMove', 'wsRoot', 'wsList']) {
     assert.ok(!params[gone], gone + ' 应已从贡献中移除')
   }
   for (const d of descriptors) {
@@ -454,9 +548,12 @@ test('「编辑」按钮：用官方规则的同一文件地址 + kind=file-edit
   const action = h.find('sidebar.right.tab.document.actions')
   const tree = action.comp({ absolutePath: ABS, sessionId: SESSION })
   assert.ok(tree, '按钮组件没有渲染')
-  assert.equal(tree.type, 'button')
-  assert.equal(tree.children.join(''), '编辑')
-  tree.props.onClick()
+  assert.equal(tree.type, 'span', '预览页头动作容器')
+  const buttons = tree.children.filter((child) => child && child.type === 'button')
+  assert.equal(buttons.length, 1, '预览页头只保留「编辑」按钮')
+  const edit = buttons.find((child) => child.children.join('') === '编辑')
+  assert.ok(edit, '缺少「编辑」按钮')
+  edit.props.onClick()
   assert.equal(h.opened.length, 1, '应调用一次 openResource')
   const [address, options] = h.opened[0]
   assert.equal(address, ADDRESS, '地址要用会话作用域 + 绝对路径，并把盘符冒号保留为字面量')
@@ -592,6 +689,249 @@ test('官方高亮件缺失时不崩，降级为纯文本编辑', async () => {
   assert.ok(json.includes('dfe-input'), '拿不到官方高亮件时仍应能编辑')
   inst.unmount()
 })
+
+test('文件页头：新建文件 / 新建文件夹按钮与对话框状态', async () => {
+  const h = makeHarness()
+  await h.exported.apply(h.ctx)
+  const files = h.find('sidebar.right.tab.files.actions')
+  assert.ok(files, '未注册文件页头动作槽')
+  assert.equal(files.def.id, 'dsh-file-explorer')
+  assert.equal(files.def.order, -20)
+  const inst = h.hooks.mount(files.comp, { absolutePath: 'D:\\DeepseekPlugin\\notes', sessionId: SESSION })
+  inst.render()
+  await sleep(30)
+  inst.render()
+  const buttons = []
+  const walk = (node) => {
+    if (node === null || typeof node !== 'object') return
+    if (node.props && node.props.className === 'dfe-files-tool') buttons.push(node)
+    for (const child of node.children || []) walk(child)
+  }
+  walk(inst.tree)
+  assert.equal(buttons.length, 2, '本地后端应显示新建文件与新建文件夹')
+  buttons[0].props.onClick()
+  assert.equal(h.exported.__test.getFileOpsDialog().kind, 'create-file')
+  assert.equal(h.exported.__test.getFileOpsDialog().directory, 'D:\\DeepseekPlugin\\notes')
+  buttons[1].props.onClick()
+  assert.equal(h.exported.__test.getFileOpsDialog().kind, 'create-folder')
+  inst.unmount()
+})
+
+test('右键菜单：目录/文件 provider、动作与复制相对路径', async () => {
+  const h = makeHarness()
+  await h.exported.apply(h.ctx)
+  const directory = h.menuProviders.find((p) => p.id === 'file-explorer.directory')
+  const file = h.menuProviders.find((p) => p.id === 'file-explorer.file')
+  assert.ok(directory, '缺少 directory 菜单 provider')
+  assert.ok(file, '缺少 file 菜单 provider')
+  assert.equal(directory.target, 'directory')
+  assert.equal(file.target, 'file')
+  assert.equal(directory.order, 50)
+  const dirActions = directory.resolve({ sessionId: SESSION, path: 'D:\\DeepseekPlugin\\notes' })
+  assert.deepEqual(dirActions.map((a) => a.id), ['createFile', 'createFolder', 'rename', 'copyRelative'])
+  const fileActions = file.resolve({ sessionId: SESSION, path: ABS })
+  assert.deepEqual(fileActions.map((a) => a.id), ['rename', 'delete', 'copyRelative'])
+  assert.equal(fileActions.find((a) => a.id === 'delete').danger, true)
+
+  fileActions.find((a) => a.id === 'copyRelative').run()
+  await sleep(20)
+  assert.ok(h.calls.some((c) => c[0] === 'fsDescribe' && c[1] === ABS && c[2] === SESSION), '复制相对路径应走 fsDescribe')
+  assert.deepEqual(h.copied, ['a.md'], '应把相对路径写进剪贴板')
+  assert.ok(h.notices.some((n) => n[0] === '已复制相对路径' && n[1] === true), '应提示复制成功')
+
+  fileActions.find((a) => a.id === 'delete').run()
+  assert.equal(h.exported.__test.getFileOpsDialog().kind, 'delete')
+  assert.equal(h.exported.__test.getFileOpsDialog().path, ABS)
+})
+
+test('对话框：新建文件提交 fsCreateFile 并打开编辑页', async () => {
+  const h = makeHarness()
+  await h.exported.apply(h.ctx)
+  const Dialog = h.exported.__test.CreateEntryDialog
+  const dialog = { kind: 'create-file', sessionId: SESSION, directory: 'D:\\DeepseekPlugin\\notes' }
+  const inst = h.hooks.mount(Dialog, { dialog })
+  inst.render()
+  await sleep(30)
+  inst.render()
+  const input = findNode(inst.tree, (n) => n.props && n.props.className === 'dfe-field-input')
+  assert.ok(input, '新建对话框应有文件名输入框')
+  input.props.onChange({ target: { value: 'notes.md' } })
+  await sleep(10)
+  inst.render()
+  const create = findNode(inst.tree, (n) => n.type === 'button' && n.children.join('') === '创建')
+  assert.ok(create, '应有创建按钮')
+  create.props.onClick()
+  await sleep(40)
+  const call = h.calls.find((c) => c[0] === 'fsCreateFile')
+  assert.deepEqual(call, ['fsCreateFile', 'D:\\DeepseekPlugin\\notes', 'notes.md', SESSION])
+  assert.ok(h.notices.some((n) => n[0].includes('已创建') && n[1] === true))
+  assert.equal(h.opened.length, 1, '新建文件后应打开编辑页')
+  assert.equal(h.opened[0][1].kind, 'file-editor')
+  assert.equal(h.opened[0][1].params.absolutePath, 'D:\\DeepseekPlugin\\notes\\notes.md')
+  assert.equal(h.exported.__test.getFileOpsDialog(), null, '成功后应关闭对话框')
+  inst.unmount()
+})
+
+test('对话框：删除提交带版本号，成功后发出 deleted 事件', async () => {
+  const h = makeHarness()
+  await h.exported.apply(h.ctx)
+  const Dialog = h.exported.__test.DeleteDialog
+  let deleted = null
+  const unsubscribe = (() => {
+    /* 通过 __test.emitFileEvent 的监听面不可直接订阅；这里从编辑页行为覆盖事件。 */
+    return () => {}
+  })()
+  const dialog = { kind: 'delete', sessionId: SESSION, path: ABS }
+  const inst = h.hooks.mount(Dialog, { dialog })
+  inst.render()
+  await sleep(30)
+  inst.render()
+  const confirm = findNode(inst.tree, (n) => n.type === 'button' && n.children.join('') === '永久删除')
+  assert.ok(confirm, '应有永久删除按钮')
+  confirm.props.onClick()
+  await sleep(40)
+  const call = h.calls.find((c) => c[0] === 'fsDelete')
+  assert.deepEqual(call, ['fsDelete', ABS, 'v1', SESSION], '删除必须带 fsDescribe 拿到的版本号')
+  assert.ok(h.notices.some((n) => n[0].includes('已删除') && n[1] === true))
+  assert.equal(h.exported.__test.getFileOpsDialog(), null)
+  unsubscribe()
+  inst.unmount()
+})
+
+test('拖拽引用：mention / payload / 名称校验 / 包含性', () => {
+  const A = makeHarness().exported.__test
+  assert.equal(A.formatReferenceMention('D:\\work\\src\\a.md', 'D:\\work', 'win32'), '@src/a.md')
+  assert.equal(A.formatReferenceMention('D:\\work\\src\\a b.md', 'D:\\work', 'win32'), '@"src/a b.md"')
+  assert.equal(A.formatReferenceMention('D:\\other\\a.md', 'D:\\work', 'win32'), '@D:/other/a.md')
+  assert.equal(A.formatReferenceMention('/home/me/work/a.md', '/home/me/work', 'linux'), '@a.md')
+  assert.equal(A.formatReferenceMention('/home/me/work/a b.md', '/home/me/work', 'linux'), '@"a b.md"')
+  assert.equal(A.formatReferenceMention('/home/me/work/a"b.md', '/home/me/work', 'linux'), null)
+
+  const payload = A.referenceDragPayload('D:\\work\\src\\a.md', 'D:\\work', 'win32')
+  assert.deepEqual(payload, { path: 'D:\\work\\src\\a.md', root: 'D:\\work', name: 'a.md', mention: '@src/a.md' })
+  assert.equal(A.referenceDragPayload('D:\\work\\a"b.md', 'D:\\work', 'win32'), null)
+
+  assert.equal(A.validateEntryNameClient('notes.md', 'win32').ok, true)
+  assert.equal(A.validateEntryNameClient('CON', 'win32').ok, false)
+  assert.equal(A.validateEntryNameClient('a:b', 'darwin').ok, false)
+  assert.equal(A.validateEntryNameClient('a:b', 'linux').ok, true)
+  assert.equal(A.validateEntryNameClient('a/b', 'linux').ok, false)
+
+  assert.equal(A.sameOrInsidePath('D:\\Work', 'D:\\work\\src\\a.md', 'win32'), true)
+  assert.equal(A.sameOrInsidePath('/home/me/work', '/home/me/Work/a.md', 'linux'), false)
+})
+
+test('拖放桥：注册官方 slot 并挂到输入框', async () => {
+  const h = makeHarness()
+  await h.exported.apply(h.ctx)
+  assert.ok(h.find('shell.overlay'), '应注册对话框宿主到 shell.overlay')
+  assert.ok(h.find('conversation.input.overlay'), '应注册输入框拖放桥')
+
+  const Bridge = h.exported.__test.InputDropBridge
+  const inst = h.hooks.mount(Bridge, {
+    sessionId: SESSION,
+    inputActions: { insertText: () => true, captureInsertion: () => ({ start: 0, end: 0 }) },
+    useSessions: (selector) => selector({ byId: { [SESSION]: { cwd: 'D:\\DeepseekPlugin\\notes' } } })
+  })
+  inst.render()
+  await sleep(10)
+  inst.render()
+  assert.equal(inst.tree.type, 'span')
+  inst.unmount()
+})
+
+test('编辑页：删除/重命名事件进入生命周期状态', async () => {
+  const h = makeHarness({ fileText: 'one\n' })
+  const A = h.exported.__test
+  await h.exported.apply(h.ctx)
+  const { inst } = await mountEditor(h)
+  A.emitFileEvent({ kind: 'deleted', path: ABS })
+  await sleep(20)
+  inst.render()
+  const json = JSON.stringify(inst.tree)
+  assert.ok(json.includes('已被删除'), '删除事件后应显示 deleted 状态')
+  assert.ok(!json.includes('"dfe-input"'), 'deleted 状态不应保留可编辑 textarea')
+  assert.ok(json.includes('复制我的内容'), '应提供复制未保存内容的出口')
+  assert.ok(json.includes('关闭标签'), '应提供关闭标签出口')
+  inst.unmount()
+})
+
+test('对话框：重命名提交 fsRename 并发出 renamed 事件', async () => {
+  const h = makeHarness()
+  await h.exported.apply(h.ctx)
+  const A = h.exported.__test
+  const events = []
+  const unsubscribe = A.subscribeFileEvents((event) => events.push(event))
+  const Dialog = A.RenameDialog
+  const dialog = { kind: 'rename', sessionId: SESSION, path: ABS }
+  const inst = h.hooks.mount(Dialog, { dialog })
+  inst.render()
+  await sleep(30)
+  inst.render()
+  const input = findNode(inst.tree, (n) => n.props && n.props.className === 'dfe-field-input')
+  assert.ok(input, '重命名对话框应有输入框')
+  input.props.onChange({ target: { value: 'b.md' } })
+  await sleep(10)
+  inst.render()
+  const confirm = findNode(inst.tree, (n) => n.type === 'button' && n.children.join('') === '重命名')
+  assert.ok(confirm, '应有重命名按钮')
+  confirm.props.onClick()
+  await sleep(40)
+  const call = h.calls.find((c) => c[0] === 'fsRename')
+  assert.deepEqual(call, ['fsRename', ABS, 'b.md', SESSION])
+  assert.equal(events.length, 1)
+  assert.equal(events[0].kind, 'renamed')
+  assert.equal(events[0].from, ABS)
+  assert.ok(h.notices.some((n) => n[0] === '已重命名' && n[1] === true))
+  unsubscribe()
+  inst.unmount()
+})
+
+test('编辑页：重命名事件进入 renamed 状态并提供新位置打开', async () => {
+  const h = makeHarness({ fileText: 'one\n' })
+  const A = h.exported.__test
+  await h.exported.apply(h.ctx)
+  const { inst } = await mountEditor(h)
+  A.emitFileEvent({ kind: 'renamed', from: ABS, to: 'D:\\DeepseekPlugin\\notes\\b.md' })
+  await sleep(20)
+  inst.render()
+  const json = JSON.stringify(inst.tree)
+  assert.ok(json.includes('已改名或移动'), '应显示 renamed 状态')
+  assert.ok(json.includes('在新位置打开'), '应提供新位置打开')
+  assert.ok(json.includes('关闭标签'), '应提供关闭标签')
+  assert.ok(!json.includes('"dfe-input"'), 'renamed 状态不应保留可编辑 textarea')
+  inst.unmount()
+})
+
+test('拖动源：官方树行 dragstart 写入轻量引用载荷与 text/plain', async () => {
+  const h = makeHarness()
+  await h.exported.apply(h.ctx)
+  await sleep(20)
+  assert.ok(Array.isArray(h.document._listeners.dragstart) && h.document._listeners.dragstart.length > 0, '应安装 dragstart 监听')
+  assert.ok(!h.document._listeners.contextmenu || h.document._listeners.contextmenu.length === 0, '不应再安装空白处右键监听')
+  const rootEl = { getAttribute: (name) => (name === 'data-files-root' ? 'D:\\work' : null) }
+  const row = {
+    getAttribute: (name) => (name === 'data-files-path' ? 'D:\\work\\src\\a.md' : null),
+    closest: (selector) => (selector === '[data-files-root]' ? rootEl : null),
+    setAttribute: () => {}
+  }
+  const data = []
+  const event = {
+    target: { closest: (selector) => (selector.indexOf('data-files-entry') >= 0 ? row : null) },
+    dataTransfer: { types: [], setData: (type, value) => data.push([type, value]), effectAllowed: null },
+    preventDefault: () => { throw new Error('合法路径不应阻止拖动') }
+  }
+  h.document.dispatch('dragstart', event)
+  const types = data.map((item) => item[0])
+  assert.ok(types.includes('application/x-dsh-file-ref'), '应写入自定义引用 MIME')
+  assert.ok(types.includes('text/plain'), '应写入 text/plain 降级')
+  const payload = JSON.parse(data.find((item) => item[0] === 'application/x-dsh-file-ref')[1])
+  assert.equal(payload.path, 'D:\\work\\src\\a.md')
+  assert.equal(payload.mention, '@src/a.md')
+  assert.equal(data.find((item) => item[0] === 'text/plain')[1], '@src/a.md ')
+})
+
+
 
 test.after(() => {
   setTimeout(() => process.exit(process.exitCode === undefined ? 0 : process.exitCode), 50).unref()

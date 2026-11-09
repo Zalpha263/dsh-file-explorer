@@ -1,39 +1,61 @@
 # dsh-file-explorer
 [![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/Zalpha263/badge.svg)](https://hub.xerj.org/contributors/Zalpha263)
 
-DSH Web 界面里的**文件编辑器**（v2.1.0 起）：只给官方只读的文件预览补上"编辑"这一件事，不重复官方已有的浏览、预览、标签与主题能力。官方文件浏览与文档预览负责"看"，且预览是只读的（@deepseek-ai/dsh-api-workspace-files 原文："The service exposes no mutation operation."）；本插件在官方预览头部注入「编辑」按钮，用独立标签打开同一文件（会话作用域地址 + kind=file-editor，不抢默认打开），保存带版本校验。
+DSH Web 界面右侧栏「文件」页的**文件管理与编辑器**（v2.3.0）：给官方只读的文件浏览/预览补上新建、重命名、删除、相对路径复制，以及把文件拖进会话框的 @路径引用；同时保留 v2.1 的编辑页。官方文件 API 明确不提供变更操作（@deepseek-ai/dsh-api-workspace-files："The service exposes no mutation operation."），所以所有写操作由本插件 Host 承担，并仍受会话工作区与沙箱约束。
 
 ## 能做什么
 
-- **编辑纯文本**：Markdown、代码、配置、JSON/YAML、脚本等；Ctrl+S 保存、Tab 两空格缩进。
-- **官方同款渲染**：复刻官方 documentpreview 代码块（字体 token、16px padding、CSS counter 行号、官方高亮），并跟随设置里的代码字号。
-- **默认自动换行**：与官方一致；页头可切换为不换行 + 横向滚动，两层共享同一字体/行高/换行规则，光标不偏移。
-- **保存与冲突**：版本令牌乐观并发；外部修改时保存被拒，只提供「重载（丢弃我的修改）」与「复制我的内容」，绝不静默覆盖。
-- **跟随外部改动**：每 2.5 秒检查版本，仅在标签可见时轮询；未修改自动重载，已修改只提示冲突。
-- **按会话读写**：从标签 contentId 解析 sessionId，写边界与沙箱策略都取该会话的 cwd；会话不存在时显式报错，不借用其它会话。
-- **拒绝不该编辑的**：二进制、超过 2MB、非 UTF-8（GBK/UTF-16 等）会说明原因并拒绝。
+- **新建文件 / 新建文件夹**：文件页头按钮，或在目录行右键；新建文件成功后默认用插件编辑页打开。
+- **重命名**：文件与文件夹，同一目录内改名；在目录/文件行右键。
+- **删除文件**：二次确认、带版本守卫；只删普通文件，不删文件夹。
+- **复制相对路径**：复制相对于会话工作区的路径（统一 `/`）；绝对路径复制仍由官方右键菜单提供，不重复。
+- **拖文件进会话框**：从右侧栏目录树把文件拖到输入框，插入官方 `@相对路径` 引用（带空格自动加引号；目标会话 cwd 不包含该文件时为绝对路径）。**不是上传附件**，不复制字节；官方 ui-reference 会渲染成引用胶囊。
+- **编辑文本**：官方只读预览头部的「编辑」按钮打开编辑页；Ctrl+S 保存、Tab 两空格缩进、官方同款高亮与行高，保存带乐观并发校验。
+- **跟随外部改动**：编辑页每 2.5 秒检查版本；文件被删除/改名时进入 deleted/renamed 状态，可复制未保存内容、到新位置打开或关闭标签。
 
 ## 界面
 
 | 位置 | 内容 |
 | --- | --- |
-| 官方预览头部 | 「编辑」按钮，与其他官方动作并排 |
-| 编辑页顶栏 | 路径 · 大小 · 未保存标记 · 状态 · 换行开关 · 重载 · 保存（官方 38px 工具栏） |
-| 编辑页主体 | 官方样式代码块：语言标签 + 复制、行号、透明输入区；默认换行 |
-| 冲突提示条 | 文件被外部修改时出现：重载 / 复制我的内容 |
+| 官方文件页头 | 「新建文件」；本地文件系统后端还会显示「新建文件夹」 |
+| 文件/文件夹行右键 | 新建文件… / 新建文件夹… / 重命名… / 删除文件…（仅文件）/ 复制相对路径 |
+| 官方预览页头 | 「编辑」（进入本插件编辑页） |
+| 编辑页头 | 路径 · 大小 · 未保存标记 · 状态 · 自动换行 · 重载 · 保存 |
+| 全局对话框 | 新建文件/文件夹、重命名、删除确认；官方 primitives Modal，缺失时自带遮罩 |
+| 编辑器主体 | 官方样式代码块：语言标签 + 复制、行号、透明输入区；默认换行 |
 
-编辑页是官方右侧栏里的标签，标题由官方使用 `title(address)` 生成（`编辑 · 文件名`），并继承官方标签能力（拖出、并排、跟随主题）。
+## 跨平台规则
+
+名称校验与路径格式化由 Host 的 `lib/paths.js` 统一负责，客户端只做输入期预检：
+
+| 规则 | Windows | macOS | Linux |
+| --- | --- | --- | --- |
+| 非法字符 | `< > : " / \ | ? *` + 控制字符 | `/ \ :` + 控制字符 | `/ \` + 控制字符 |
+| 保留名 | `CON/PRN/AUX/NUL/COM1-9/LPT1-9`（含扩展名） | 无 | 无 |
+| 尾随空格/点 | 拒绝 | 允许 | 允许 |
+| 最大组件 | 255 字符 | 255 字符 | 255 UTF-8 字节 |
+| 大小写 | 不敏感 | 默认不敏感 | 敏感 |
+
+- 新建只填**名字**，不能包含路径分隔符；要建嵌套目录先建文件夹。
+- 不做 Unicode NFC/NFD 归一化；同名交给 `createIfAbsent`（文件）或 `dev+ino`（重命名）判定。
+- 绝对路径按宿主平台输出（Windows 反斜杠、POSIX 斜杠，UNC 保留）；相对路径统一 `/`。
+- 远程浏览器访问另一台宿主时，路径/分隔符/大小写以 Host 为准，不按浏览器平台猜测。
 
 ## 边界与限制
 
-- **只编辑文本**：二进制、>2MB、非 UTF-8 一律拒绝并说明原因。
-- **写入受工作区约束**：写路径必须在该标签所属会话的 cwd 内（词法归一化 + realpath 复核），沙箱策略同会话；读接口不校验工作区。
-- **不做文件管理**：新建/改名/移动/复制/删除/回收站与目录树都不在职责内，官方 API 没有变更操作。
-- **不做浮动面板、不抢默认打开**：面板形态交给官方标签条，"默认打开"仍归官方。
+- **只操作会话工作区内**：所有写操作都按标签/会话的 cwd 做词法 + 父目录 realpath 复核；`read-only` 会话直接拒绝。
+- **文件夹能力仅本地后端**：新建文件夹、重命名使用宿主 Node fs，需要 `processPathFromHostPath()` 可用；远程/SSH 文件系统会明确提示“仅本地文件系统可用”。新建/删除文件仍走官方 `ctx.fs`，各后端一致。
+- **只删文件**：文件夹删除（递归）不在本期；右键菜单不会出现该动作。
+- **删除是永久删除**：对话框写明不可恢复；不做系统回收站。
+- **符号链接**：删除本地链接时只删链接本身；非本地后端拒绝；重命名会移动链接。
+- **不做**：复制副本/粘贴、文件搜索、多选、拖拽移动；绝对路径复制（官方已有）。
+- **不做空白右键菜单**：Files 页/导航树空白处保留官方行为（官方不提供，本插件也不再合成）。
+- **不做页头文件操作菜单**：重命名/删除/复制相对路径统一走目录/文件行右键，预览页头与编辑页头不再重复放按钮。
+- **拖入是引用**：不读取文件内容、不复制字节；官方从系统拖入的附件上传行为不变。
 
 ## 安装
 
-要求 DSH `>=0.2.0-rc.1 <0.3.0-0` 与 pnpm；已核对宿主：Web 0.2.0-rc.2、桌面 0.2.1-rc.3（当前安装），安装后仍需在目标宿主冒烟。
+要求 DSH `>=0.2.0-rc.1 <0.3.0-0` 与 pnpm；已核对宿主：Web 0.2.2-rc.1（app.asar）。装完重启 DSH 生效。
 
 ```
 # 发布态
@@ -44,31 +66,73 @@ dsh plugin --profile web add D:/path/to/dsh-file-explorer
 dsh plugin --profile web remove dsh-file-explorer
 ```
 
-装完重启 DSH 生效；桌面版在侧边栏「插件」页用绝对路径添加插件目录后重启应用。
+桌面版在侧边栏「插件」页用绝对路径添加插件目录后重启应用。
 
 ## 开发者
 
-Host（`lib/index.js`）暴露三个 Remote 方法，`sessionId` 都是可选尾参：
+### Host（`lib/index.js`）
+
+暴露 9 个 Remote 方法，`sessionId` 都是可选尾参：
 
 | 方法 | 行为 |
 | --- | --- |
-| `fsStat(path, sessionId?)` | 返回类型、大小与版本令牌（轮询用） |
-| `fsRead(path, maxBytes, sessionId?)` | 返回文本、大小、版本，以及 `truncated` / `binary` / `decodeValid` |
-| `fsWrite(path, content, expectedVersion, sessionId?)` | 以 `replaceIfVersion` 做同临界区的版本校验后写回，返回新版本 |
+| `fsStat(path, sessionId?)` | 类型、大小与版本令牌（编辑页轮询用） |
+| `fsRead(path, maxBytes, sessionId?)` | 文本、大小、版本、`truncated`/`binary`/`decodeValid` |
+| `fsWrite(path, content, expectedVersion, sessionId?)` | 版本校验后写回 |
+| `fsEnvironment(sessionId?)` | 平台、分隔符、大小写、本地后端、cwd/工作区根 |
+| `fsDescribe(path, sessionId?)` | absolute/native/relative/name/directory/kind/exists/link/insideWorkspace/version/size |
+| `fsCreateFile(directory, name, sessionId?)` | 名称校验 + 父目录校验 + `createIfAbsent` + 沙箱策略 |
+| `fsCreateFolder(directory, name, sessionId?)` | 仅本地后端，Node `mkdir` |
+| `fsRename(path, newName, sessionId?)` | 仅本地后端，同目录内改名，文件+文件夹 |
+| `fsDelete(path, expectedVersion, sessionId?)` | 只删文件；链接只删链接本身 |
 
-带 `sessionId` 时按该会话 `header.cwd` 解析路径、限制写入边界并使用该会话沙箱策略；不传时依次用实时最近根会话（`agents.roots()`）、工作区注册表、部署默认根兜底。
+带 `sessionId` 时按该会话 `header.cwd` 解析路径、限制边界并使用该会话沙箱策略；不传时依次用实时最近根会话、工作区注册表、部署默认根兜底。未知 `sessionId` 显式报错。
 
-Client（`lib/client.js`）是手写 `__ModuleLoader__` bundle：注册官方预览头部动作与 `file-editor` 标签类型（不声明 `patterns`、`keepMounted: true`），两阶段在 `sidebar.right.pane.tab` 槽位回调里注册（服务晚到有界重试）。渲染几何、字体与行号由官方 token 驱动；地址只生成会话作用域绝对路径，不做 cwd 相对化。`@deepseek-ai/dsh-client-ui-primitives` 是客户端基线库，可直接 require，不要写进 `dsh.client.external`。测试：`node test/host.test.mjs`（12 例）、`node test/client-smoke.test.mjs`（16 例）；改客户端 bundle 后必须跑冒烟。
+### Client（`lib/client.js`）
+
+手写 `__ModuleLoader__` bundle。用到的官方接口：
+
+- `sidebar.right.tab.files.actions`：文件页头动作（owner `absolutePath`）。
+- `ctx.contextMenus.register/notify`：目录/文件行右键菜单与操作结果提示。
+- `shell.overlay` + primitives `Modal`：全局新建/重命名/删除对话框。
+- `conversation.input.overlay` + session 作用域 `inputActions.insertText`：拖入引用桥。
+- 官方目录树行自带 `data-files-entry` / `data-files-path` / `data-files-root`：拖动源只读这些属性，找不到就自然禁用拖拽。
+- `@file` mention 语法与 `ui-reference`：插入文本由官方识别为引用胶囊。
+
+拖拽设置自定义 MIME `application/x-dsh-file-ref` 与 `text/plain`，不碰 `Files` / `application/x-dsh-file`，因此与官方附件上传互不干扰。
+
+测试：
+
+```
+node test/paths.test.mjs        # 6 例：三平台路径/名称向量
+node test/host.test.mjs         # 18 例：读/写/新建/删除/重命名/边界
+node test/client-smoke.test.mjs # 26 例：bundle、菜单、对话框、拖拽引用、编辑页
+```
 
 ## 更新日志
 
-### v2.1.0
-- 渲染对齐官方文档预览：官方字体 token、16px padding、CSS counter 行号、默认自动换行与开关、38px 页头与代码块横幅。
-- 修复 UA `pre` / `code` 字体规则导致的字体不一致、行号偏移与光标错位。
-- 代码清理：删除死状态/ref/辅助函数与响应字段、合并重复读写/复制/空状态逻辑、Host 去全局监听、精简测试桩与 README。
-- 测试：Host 12 例 + 客户端冒烟 16 例。
+### v2.3.0
+- 移除 Files 页/导航树空白处右键：空白区域恢复官方行为（官方本就不提供菜单），不再由插件合成目录根菜单。
+- 移除官方预览页头与编辑页头的「⋮ 文件操作」按钮：重命名/删除/复制相对路径统一走目录/文件行右键，减少页头按钮、避免与官方动作槽位挤在一起。
+- 保留文件页头「新建文件/新建文件夹」、行右键菜单、拖拽 @ 引用与编辑页；Host 与路径规则未变。
+- 客户端测试 26 例（移除 3 例空白右键用例）。
+
+### v2.2.1
+- 加固 Files 页/导航树空白处右键：document 捕获阶段监听、右栏面板按命中点几何兜底、session→cwd 兜底；树行/路径标签/标签 chip/文档正文/输入控件保留官方行为。
+- 重新构建客户端 bundle 后需要**重启宿主进程**（桌面版请从托盘彻底退出再启动）；仅刷新页面会继续使用宿主启动时缓存的旧 bundle。
+
+### v2.2.0
+- 新增文件页头「新建文件/新建文件夹」、目录/文件右键菜单、预览/编辑页头「⋮ 文件操作」，以及 Files 页/导航树空白处的目录根右键菜单。
+- 新增 Host 6 个方法：environment/describe/createFile/createFolder/rename/delete；所有写操作仍限定会话工作区，删除带版本守卫。
+- 新增跨平台路径/名称模块 `lib/paths.js`：Windows 保留名/非法字符、macOS 冒号、Linux 字节长度等。
+- 新增从右侧栏目录树拖文件到会话框：插入 `@相对路径` 引用（官方 inputActions），不上传附件。
+- 编辑页跟随删除/重命名进入 deleted/renamed 状态，可复制未保存内容或关闭标签。
+- 文档与测试同步；Host 18 例、客户端 29 例、路径 6 例。
 
 ### 历史版本
-- v2.0.1：两阶段注册、按会话取根与策略、keepMounted、120ms 高亮合并、轮询可见性、地址编码对齐官方。
-- v2.0.0：定位重塑为"官方预览的编辑补充件"，Host 收窄为三个方法，增加非 UTF-8 保护。
+- v2.1.0：渲染对齐官方文档预览；官方字体 token、16px padding、CSS counter 行号、默认自动换行。
+- v2.0.1：两阶段注册、按会话取根与策略、keepMounted、120ms 高亮合并、轮询可见性。
+- v2.0.0：定位为官方只读预览的编辑补充件，Host 收窄为三个方法。
 - v1.13.0：适配 DSH 0.2.0-rc 线，新增 locale 展示元数据。
+- v1.4.0：删除到系统回收站（仅 Windows）与目录树实时刷新。
+- v1.3.0：编辑与 IDE 风格右键菜单（新建文件/文件夹、重命名、复制、粘贴、绝对/相对路径复制）。
